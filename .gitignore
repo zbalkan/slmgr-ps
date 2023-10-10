@@ -221,3 +221,4 @@ ModelManifest.xml
 .DS_Store
 
 .vscode/
+.apikey

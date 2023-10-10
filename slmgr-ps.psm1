@@ -7,14 +7,14 @@
 # Export only the functions using PowerShell standard verb-noun naming.
 # Be sure to list each exported functions in the FunctionsToExport field of the module manifest file.
 # This improves performance of command discovery in PowerShell.
-Export-ModuleMember -Function *-*
+Export-ModuleMember -Function Start-WindowsActivation
 
 
 <#
 .Synopsis
 Activates Windows via KMS
 .DESCRIPTION
-It's a drop in replacement for slmgr scripts
+A drop in replacement for slmgr script
 .EXAMPLE
 Start-WindowsActivation -Verbose # Activates the local computer
 .EXAMPLE
