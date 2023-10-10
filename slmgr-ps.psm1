@@ -92,13 +92,16 @@ function global:Start-WindowsActivation
             param(
                 [string]$Computer
             )
+
+            $query = 'SELECT LicenseStatus FROM SoftwareLicensingProduct
+WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
             if ($Computer -eq 'localhost')
             {
-                $product = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingProduct' | Where-Object { $_.PartialProductKey }
+                $product = Get-CimInstance -Query $query
             }
             else
             {
-                $product = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingProduct' -ComputerName $Computer | Where-Object { $_.PartialProductKey }
+                $product = Get-CimInstance -Query $query -ComputerName $Computer
             }
             $status = [LicenseStatusCode]( $product | Select-Object LicenseStatus).LicenseStatus
             $activated = $status -eq [LicenseStatusCode]::Licensed
@@ -272,5 +275,54 @@ function global:Start-WindowsActivation
                 }
             }
         }
+    }
+}
+
+function global:Get-WindowsActivation
+{
+    [CmdletBinding(SupportsShouldProcess = $false,
+        PositionalBinding = $false,
+        ConfirmImpact = 'Low')]
+    param(
+        [string]$Computer
+    )
+    begin
+    {
+        # Enum for a meaningful check. Reference: https://docs.microsoft.com/en-us/previous-versions/windows/desktop/sppwmi/softwarelicensingproduct
+        enum LicenseStatusCode
+        {
+            Unlicensed
+            Licensed
+            OOBGrace
+            OOTGrace
+            NonGenuineGrace
+            Notification
+            ExtendedGrace
+        }
+    }
+    process
+    {
+        $query = 'SELECT Name,Description,PartialProductKey,LicenseStatus FROM SoftwareLicensingProduct
+WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+        if ($Computer -eq 'localhost')
+        {
+            $product = Get-CimInstance -Query $query
+        }
+        else
+        {
+            $product = Get-CimInstance -Query $query -ComputerName $Computer
+        }
+        $name = $product.Name
+        $desc = $product.Description
+        $partial = $product.PartialProductKey
+        $status = [LicenseStatusCode]( $product.LicenseStatus)
+
+        $result = [PSCustomObject]@{
+            Name              = $name
+            Description       = $desc
+            PartialProductKey = $partial
+            LicenseStatus     = $status
+        }
+        return $result
     }
 }
