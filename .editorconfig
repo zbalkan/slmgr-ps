@@ -1,0 +1,11 @@
+# top-most EditorConfig file
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+insert_final_newline = true
+
+# PowerShell files
+[*.{ps1,psm1,psd1}]
+indent_size = 4
