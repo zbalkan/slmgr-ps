@@ -7,7 +7,7 @@
 # Export only the functions using PowerShell standard verb-noun naming.
 # Be sure to list each exported functions in the FunctionsToExport field of the module manifest file.
 # This improves performance of command discovery in PowerShell.
-Export-ModuleMember -Function Start-WindowsActivation, Get-WindowsActivation
+Export-ModuleMember -Function Start-WindowsActivation
 
 <#
 .Synopsis
@@ -24,6 +24,8 @@ Start-WindowsActivation -Verbose # Activates the local computer
 Start-WindowsActivation -Computer WS01 # Activates the computer named WS01
 .EXAMPLE
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500 # Activates the computer named WS01 against server.domain.net:2500
+.EXAMPLE
+Start-WindowsActivation -ReArm # ReArm the trial period. ReArming already licensed devices can break current license issues. Guard clauses wil protect 99% but cannot guarantee 100%.
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
@@ -31,7 +33,7 @@ function global:Start-WindowsActivation
 {
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $false,
-        ConfirmImpact = 'High',
+        ConfirmImpact = 'Medium',
         DefaultParameterSetName = 'default')]
     Param
     (
@@ -75,40 +77,66 @@ function global:Start-WindowsActivation
             ParameterSetName = 'SpecifyKMSServer')]
         [ValidateRange(1, 65535)]
         [int]
-        $KMSServerPort = 1688,
-
-        [Parameter(Mandatory = $false,
-            Position = 2,
-            ValueFromPipeline = $false,
-            ValueFromPipelineByPropertyName = $false,
-            ValueFromRemainingArguments = $false,
-            ParameterSetName = 'ReArm')]
-        [switch]$ReArm
+        $KMSServerPort = 1688
     )
     Begin
     {
-        $ErrorActionPreference = 'Stop'
-        Write-Verbose 'ErrorActionPreference: Stop'
     }
     Process
     {
-        if ($pscmdlet.ShouldProcess('Computer', 'Activate/rearm license via KMS'))
+        if ($pscmdlet.ShouldProcess('Computer', 'Activate license via KMS'))
         {
-            Write-Verbose "Current parameter set: $($PsCmdlet.ParameterSetName)"
+            $ErrorActionPreference = 'Stop'
+            Write-Verbose 'ErrorActionPreference: Stop'
 
-            if ($PsCmdlet.ParameterSetName -like 'ReArm')
+            Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
+            foreach ($Computer in $Computers)
             {
-                rearm -Computers $Computers
-            }
-            else
-            {
-                activate -Computers $Computers
+
+                # Sanitize Computer name
+                $Computer = sanitizeComputerName -Computer $Computer
+                Write-Verbose "Computer name: $Computer"
+
+                # Check Windows Activation Status
+                $product = getLicenseStatus -Computer $Computer
+                Write-Verbose "License Status: $($product.Status)"
+                if ($product.Activated) { Write-Warning 'The product is already activated.'; continue; }
+
+                # Get product key
+                $productKey = getProductKey -Computer $Computer
+                Write-Verbose "Product Key (for KMS): $productKey"
+
+                # Activate Windows
+                if ($productKey -eq 'Unknown')
+                {
+                    Write-Error 'Unknown OS.'
+                }
+                else
+                {
+                    if ($PSCmdlet.ParameterSetName -eq 'SpecifyKMSServer')
+                    {
+                        activateWithParams -Computer $Computer -ProductKey $productKey -KeyServerName $KMSServerFQDN -KeyServerPort $KMSServerPort
+                    }
+                    else
+                    {
+                        activateWithDNS -Computer $Computer -ProductKey $productKey
+                    }
+
+                    $product = getLicenseStatus -Computer $Computer
+                    if ($product.Activated)
+                    {
+                        Write-Verbose "The computer activated succesfully. Current status: $($product.LicenseStatus)"
+                    }
+                    else
+                    {
+                        Write-Error "Activation failed. Current status: $($product.LicenseStatus)"
+                    }
+                }
             }
         }
     }
     End
     {
-        Write-Verbose 'Exiting Start-WindowsActivation cmdlet'
     }
 }
 
@@ -123,11 +151,11 @@ string[]. You can pass the computer names
 .OUTPUTS
 psobject. The number of properties depends on basic or extended mode.
 .EXAMPLE
-Get-WindowsActivation # Collects basic license of local computer, equal to slmgr.vbs /dli
+Get-WindowsActivation # Collects basic license information of local computer, equal to slmgr.vbs /dli
 .EXAMPLE
-Get-WindowsActivation -Extended # Collects extended license of local computer, equal to slmgr.vbs /dlv
+Get-WindowsActivation -Extended # Collects extended license information of local computer, equal to slmgr.vbs /dlv
 .EXAMPLE
-Get-WindowsActivation -Computer WS01 # Collects basic license of computer WS01 over WinRM
+Get-WindowsActivation -Computer WS01 # Collects basic license information of computer WS01 over WinRM
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
@@ -150,8 +178,6 @@ function global:Get-WindowsActivation
     )
     Begin
     {
-        $ErrorActionPreference = 'Stop'
-        Write-Verbose 'ErrorActionPreference: Stop'
     }
     Process
     {
@@ -177,7 +203,6 @@ function global:Get-WindowsActivation
     }
     End
     {
-        Write-Verbose 'Exiting Get-WindowsActivation cmdlet'
     }
 }
 
@@ -195,7 +220,6 @@ enum LicenseStatusCode
     NonGenuineGrace
     Notification
     ExtendedGrace
-    Unknown
 }
 
 function getLicenseStatus
@@ -214,14 +238,7 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     {
         $product = Get-CimInstance -Query $query -ComputerName $Computer
     }
-    if ($null -eq $product -or $null -eq $product.LicenseStatus)
-    {
-        $status = [LicenseStatusCode]::Unknown
-    }
-    else
-    {
-        $status = [LicenseStatusCode]($product.LicenseStatus)
-    }
+    $status = [LicenseStatusCode]( $product | Select-Object LicenseStatus).LicenseStatus
     $activated = $status -eq [LicenseStatusCode]::Licensed
     $result = [PSCustomObject]@{
         LicenseStatus = $status
@@ -294,63 +311,6 @@ function getProductKey
     return $productKey
 }
 
-function activate
-{
-    param(
-        [string[]]$Computers
-    )
-    Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
-    foreach ($Computer in $Computers)
-    {
-
-        # Sanitize Computer name
-        $Computer = sanitizeComputerName -Computer $Computer
-        Write-Verbose "Computer name: $Computer"
-
-        # Check Windows Activation Status
-        $product = getLicenseStatus -Computer $Computer
-        Write-Verbose "License Status: $($product.Status)"
-        if ($product.Activated) { Write-Warning 'The product is already activated.'; continue; }
-
-        if ($product.LicenseStatus -eq [LicenseStatusCode]::Unknown)
-        {
-            Write-Error 'License status cannot be collected. It is suggested to restart computer.'
-            continue
-        }
-
-        # Get product key
-        $productKey = getProductKey -Computer $Computer
-        Write-Verbose "Product Key (for KMS): $productKey"
-
-        # Activate Windows
-        if ($productKey -eq 'Unknown')
-        {
-            Write-Error 'Unknown OS.'
-        }
-        else
-        {
-            if ($PSCmdlet.ParameterSetName -eq 'SpecifyKMSServer')
-            {
-                activateWithParams -Computer $Computer -ProductKey $productKey -KeyServerName $KMSServerFQDN -KeyServerPort $KMSServerPort
-            }
-            else
-            {
-                activateWithDNS -Computer $Computer -ProductKey $productKey
-            }
-
-            $product = getLicenseStatus -Computer $Computer
-            if ($product.Activated)
-            {
-                Write-Verbose "The computer activated succesfully. Current status: $($product.LicenseStatus)"
-            }
-            else
-            {
-                Write-Error "Activation failed. Current status: $($product.LicenseStatus)"
-            }
-        }
-    }
-}
-
 function activateWithDNS
 {
     param(
@@ -421,14 +381,7 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     $name = $product.Name
     $desc = $product.Description
     $partial = $product.PartialProductKey
-    if ($null -eq $product -or $null -eq $product.LicenseStatus)
-    {
-        $status = [LicenseStatusCode]::Unknown
-    }
-    else
-    {
-        $status = [LicenseStatusCode]($product.LicenseStatus)
-    }
+    $status = [LicenseStatusCode]( $product.LicenseStatus)
 
     $result = [PSCustomObject]@{
         Name              = $name
@@ -443,6 +396,55 @@ function getExtendedLicenseInformation
 {
     [CmdletBinding()]
     param (
+        [Parameter()]
+        [string]
+        $Computer
+    )
+
+    $extendedQuery = 'SELECT Name,Description,ID,ApplicationID,ProductKeyID,ProductKeyChannel,OfflineInstallationId,UseLicenseURL,ValidationURL,PartialProductKey,LicenseStatus,RemainingAppReArmCount,RemainingSkuReArmCount,TrustedTime FROM SoftwareLicensingProduct
+WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+
+    if ($Computer -eq 'localhost')
+    {
+        $product = Get-CimInstance -Query $extendedQuery
+    }
+    else
+    {
+        $product = Get-CimInstance -Query $extendedQuery -ComputerName $Computer
+    }
+    $name = $product.Name
+    $desc = $product.Description
+    $activationID = $product.ID
+    $applicationID = $product.ApplicationID
+    $pkID = $product.ProductKeyID
+    $pkChannel = $product.ProductKeyChannel
+    $installationID = $product.OfflineInstallationId
+    $licenseUrl = $product.UseLicenseURL
+    $validationUrl = $product.ValidationURL
+    $partial = $product.PartialProductKey
+    $status = [LicenseStatusCode]( $product.LicenseStatus)
+    $remainingAppRearm = $product.RemainingAppReArmCount
+    $remainingSkuRearm = $product.RemainingSkuReArmCount
+    $trustedTime = [datetime]::Parse($product.Trustedtime)
+
+    $result = [PSCustomObject]@{
+        Name                       = $name
+        Description                = $desc
+        ActivationID               = $activationID
+        ApplicationID              = $applicationID
+        ProductKeyID               = $pkID
+        ProductKeyChannel          = $pkChannel
+        InstallationID             = $installationID
+        UseLicenseURL              = $licenseUrl
+        ValidationURL              = $validationUrl
+        PartialProductKey          = $partial
+        LicenseStatus              = $status
+        RemainingWindowsRearmCount = $remainingAppRearm
+        RemainingSkuRearmCount     = $remainingSkuRearm
+        TrustedTime                = $trustedTime
+    }
+    return $result
+}
         [Parameter()]
         [string]
         $Computer
