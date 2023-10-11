@@ -7,7 +7,7 @@
 # Export only the functions using PowerShell standard verb-noun naming.
 # Be sure to list each exported functions in the FunctionsToExport field of the module manifest file.
 # This improves performance of command discovery in PowerShell.
-Export-ModuleMember -Function Start-WindowsActivation
+Export-ModuleMember -Function Start-WindowsActivation, Get-WindowsActivation
 
 <#
 .Synopsis
@@ -31,7 +31,7 @@ function global:Start-WindowsActivation
 {
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $false,
-        ConfirmImpact = 'Medium',
+        ConfirmImpact = 'High',
         DefaultParameterSetName = 'default')]
     Param
     (
@@ -75,66 +75,40 @@ function global:Start-WindowsActivation
             ParameterSetName = 'SpecifyKMSServer')]
         [ValidateRange(1, 65535)]
         [int]
-        $KMSServerPort = 1688
+        $KMSServerPort = 1688,
+
+        [Parameter(Mandatory = $false,
+            Position = 2,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'ReArm')]
+        [switch]$ReArm
     )
     Begin
     {
+        $ErrorActionPreference = 'Stop'
+        Write-Verbose 'ErrorActionPreference: Stop'
     }
     Process
     {
-        if ($pscmdlet.ShouldProcess('Computer', 'Activate license via KMS'))
+        if ($pscmdlet.ShouldProcess('Computer', 'Activate/rearm license via KMS'))
         {
-            $ErrorActionPreference = 'Stop'
-            Write-Verbose 'ErrorActionPreference: Stop'
+            Write-Verbose "Current parameter set: $($PsCmdlet.ParameterSetName)"
 
-            Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
-            foreach ($Computer in $Computers)
+            if ($PsCmdlet.ParameterSetName -like 'ReArm')
             {
-
-                # Sanitize Computer name
-                $Computer = sanitizeComputerName -Computer $Computer
-                Write-Verbose "Computer name: $Computer"
-
-                # Check Windows Activation Status
-                $product = getLicenseStatus -Computer $Computer
-                Write-Verbose "License Status: $($product.Status)"
-                if ($product.Activated) { Write-Warning 'The product is already activated.'; continue; }
-
-                # Get product key
-                $productKey = getProductKey -Computer $Computer
-                Write-Verbose "Product Key (for KMS): $productKey"
-
-                # Activate Windows
-                if ($productKey -eq 'Unknown')
-                {
-                    Write-Error 'Unknown OS.'
-                }
-                else
-                {
-                    if ($PSCmdlet.ParameterSetName -eq 'SpecifyKMSServer')
-                    {
-                        activateWithParams -Computer $Computer -ProductKey $productKey -KeyServerName $KMSServerFQDN -KeyServerPort $KMSServerPort
-                    }
-                    else
-                    {
-                        activateWithDNS -Computer $Computer -ProductKey $productKey
-                    }
-
-                    $product = getLicenseStatus -Computer $Computer
-                    if ($product.Activated)
-                    {
-                        Write-Verbose "The computer activated succesfully. Current status: $($product.LicenseStatus)"
-                    }
-                    else
-                    {
-                        Write-Error "Activation failed. Current status: $($product.LicenseStatus)"
-                    }
-                }
+                rearm -Computers $Computers
+            }
+            else
+            {
+                activate -Computers $Computers
             }
         }
     }
     End
     {
+        Write-Verbose 'Exiting Start-WindowsActivation cmdlet'
     }
 }
 
@@ -176,6 +150,8 @@ function global:Get-WindowsActivation
     )
     Begin
     {
+        $ErrorActionPreference = 'Stop'
+        Write-Verbose 'ErrorActionPreference: Stop'
     }
     Process
     {
@@ -201,6 +177,7 @@ function global:Get-WindowsActivation
     }
     End
     {
+        Write-Verbose 'Exiting Get-WindowsActivation cmdlet'
     }
 }
 
@@ -218,6 +195,7 @@ enum LicenseStatusCode
     NonGenuineGrace
     Notification
     ExtendedGrace
+    Unknown
 }
 
 function getLicenseStatus
@@ -236,7 +214,14 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     {
         $product = Get-CimInstance -Query $query -ComputerName $Computer
     }
-    $status = [LicenseStatusCode]( $product | Select-Object LicenseStatus).LicenseStatus
+    if ($null -eq $product -or $null -eq $product.LicenseStatus)
+    {
+        $status = [LicenseStatusCode]::Unknown
+    }
+    else
+    {
+        $status = [LicenseStatusCode]($product.LicenseStatus)
+    }
     $activated = $status -eq [LicenseStatusCode]::Licensed
     $result = [PSCustomObject]@{
         LicenseStatus = $status
@@ -309,6 +294,63 @@ function getProductKey
     return $productKey
 }
 
+function activate
+{
+    param(
+        [string[]]$Computers
+    )
+    Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
+    foreach ($Computer in $Computers)
+    {
+
+        # Sanitize Computer name
+        $Computer = sanitizeComputerName -Computer $Computer
+        Write-Verbose "Computer name: $Computer"
+
+        # Check Windows Activation Status
+        $product = getLicenseStatus -Computer $Computer
+        Write-Verbose "License Status: $($product.Status)"
+        if ($product.Activated) { Write-Warning 'The product is already activated.'; continue; }
+
+        if ($product.LicenseStatus -eq [LicenseStatusCode]::Unknown)
+        {
+            Write-Error 'License status cannot be collected. It is suggested to restart computer.'
+            continue
+        }
+
+        # Get product key
+        $productKey = getProductKey -Computer $Computer
+        Write-Verbose "Product Key (for KMS): $productKey"
+
+        # Activate Windows
+        if ($productKey -eq 'Unknown')
+        {
+            Write-Error 'Unknown OS.'
+        }
+        else
+        {
+            if ($PSCmdlet.ParameterSetName -eq 'SpecifyKMSServer')
+            {
+                activateWithParams -Computer $Computer -ProductKey $productKey -KeyServerName $KMSServerFQDN -KeyServerPort $KMSServerPort
+            }
+            else
+            {
+                activateWithDNS -Computer $Computer -ProductKey $productKey
+            }
+
+            $product = getLicenseStatus -Computer $Computer
+            if ($product.Activated)
+            {
+                Write-Verbose "The computer activated succesfully. Current status: $($product.LicenseStatus)"
+            }
+            else
+            {
+                Write-Error "Activation failed. Current status: $($product.LicenseStatus)"
+            }
+        }
+    }
+}
+
 function activateWithDNS
 {
     param(
@@ -379,7 +421,14 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     $name = $product.Name
     $desc = $product.Description
     $partial = $product.PartialProductKey
-    $status = [LicenseStatusCode]( $product.LicenseStatus)
+    if ($null -eq $product -or $null -eq $product.LicenseStatus)
+    {
+        $status = [LicenseStatusCode]::Unknown
+    }
+    else
+    {
+        $status = [LicenseStatusCode]($product.LicenseStatus)
+    }
 
     $result = [PSCustomObject]@{
         Name              = $name
@@ -404,7 +453,7 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
     if ($Computer -eq 'localhost')
     {
-        $product = Get-CimInstance -Query $extendedQuery
+        $product = Get-CimInstance -Query $extendedQuery -Verbose
     }
     else
     {
@@ -420,7 +469,14 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     $licenseUrl = $product.UseLicenseURL
     $validationUrl = $product.ValidationURL
     $partial = $product.PartialProductKey
-    $status = [LicenseStatusCode]( $product.LicenseStatus)
+    if ($null -eq $product -or $null -eq $product.LicenseStatus)
+    {
+        $status = [LicenseStatusCode]::Unknown
+    }
+    else
+    {
+        $status = [LicenseStatusCode]($product.LicenseStatus)
+    }
     $remainingAppRearm = $product.RemainingAppReArmCount
     $remainingSkuRearm = $product.RemainingSkuReArmCount
     $trustedTime = [datetime]::Parse($product.Trustedtime)
@@ -442,4 +498,136 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
         TrustedTime                = $trustedTime
     }
     return $result
+}
+
+# Reference: https://rohnspowershellblog.wordpress.com/2013/06/15/converting-a-ciminstance-to-a-managementobject-and-back/
+function getCimPathFromInstance
+{
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [ciminstance] $InputObject
+    )
+
+    process
+    {
+        $Keys = $InputObject.CimClass.CimClassProperties |
+        Where-Object { $_.Qualifiers.Name -contains 'Key' } |
+        Select-Object Name, CimType |
+        Sort-Object Name
+
+        $KeyValuePairs = $Keys | ForEach-Object {
+
+            $KeyName = $_.Name
+            switch -regex ($_.CimType)
+            {
+                'Boolean|.Int\d+'
+                {
+                    # No quotes surrounding value:
+                    $Value = $InputObject.$KeyName
+                }
+
+                'DateTime'
+                {
+                    # Conver to WMI datetime
+                    $Value = '"{0}"' -f [System.Management.ManagementDateTimeConverter]::ToDmtfDateTime($InputObject.$KeyName)
+                }
+
+                'Reference'
+                {
+                    throw "CimInstance contains a key with type 'Reference'. This isn't currenlty supported (but can be added later)"
+                }
+
+                default
+                {
+                    # Treat it like a string and cross your fingers:
+                    $Value = '"{0}"' -f ($InputObject.$KeyName -replace "`"", "\`"")
+                }
+            }
+            '{0}={1}' -f $KeyName, $Value
+        }
+
+        if ($KeyValuePairs)
+        {
+            $KeyValuePairsString = '.{0}' -f ($KeyValuePairs -join ',')
+        }
+        else
+        {
+            # This is how WMI seems to handle paths with no keys
+            $KeyValuePairsString = '=@'
+        }
+
+        '\\{0}\{1}:{2}{3}' -f $InputObject.CimSystemProperties.ServerName,
+                               ($InputObject.CimSystemProperties.Namespace -replace '/', '\'),
+        $InputObject.CimSystemProperties.ClassName,
+        $KeyValuePairsString
+    }
+}
+
+function canRearm
+{
+    $status = (getLicenseStatus).LicenseStatus
+
+    # Any status exvept Licensed and Notification
+    $rearmableStatuses = @([LicenseStatusCode]::Unlicensed,
+        [LicenseStatusCode]::OOBGrace,
+        [LicenseStatusCode]::OOTGrace,
+        [LicenseStatusCode]::NonGenuineGrace,
+        [LicenseStatusCode]::ExtendedGrace)
+
+    Write-Verbose "Current license status: $status"
+    return ($status -in $rearmableStatuses)
+}
+
+function rearm
+{
+    param(
+        [string[]]$Computers
+    )
+
+    Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
+    foreach ($Computer in $Computers)
+    {
+        # Sanitize Computer name
+        $Computer = sanitizeComputerName -Computer $Computer
+        Write-Verbose "Computer name: $Computer"
+        if ($Computer -like 'localhost')
+        {
+            Write-Verbose 'Collecting data from local computer'
+            $serviceInstance = [wmi] (Get-CimInstance -ClassName SoftwareLicensingService | getCimPathFromInstance)
+        }
+        else
+        {
+            Write-Verbose 'Collecting data from remote computer'
+            $serviceInstance = [wmi] (Get-CimInstance -ClassName SoftwareLicensingService -ComputerName $Computer | getCimPathFromInstance)
+        }
+
+        $isRearmable = canRearm
+        Write-Verbose "Is rearmable: $isRearmable"
+
+        if ($isRearmable -eq $false)
+        {
+            Write-Verbose 'No need to rearm.'
+            continue
+        }
+
+        if ($product.LicenseStatus -eq [LicenseStatusCode]::Unknown)
+        {
+            Write-Error 'License status cannot be collected. It is suggested to restart computer.'
+            continue
+        }
+
+        try
+        {
+            [void]$serviceInstance.ReArmWindows()
+            [void]$serviceInstance.RefreshLicenseStatus()
+            Write-Verbose 'Command completed successfully.'
+            Write-Verbose 'Please restart the system for the changes to take effect.'
+        }
+        catch [System.Management.Automation.MethodInvocationException]
+        {
+            Write-Error 'Rearm failed.'
+        }
+    }
 }
