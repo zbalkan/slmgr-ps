@@ -6,6 +6,7 @@ A drop in replacement for slmgr script
 
 ## Usage
 
+### `Start-WindowsActivation` cmdlet
 ```powershell
 Install-Module slmgr-ps
 
@@ -19,6 +20,21 @@ Start-WindowsActivation -Computer WS01
 
 # Activates the computer named WS01 against server.domain.net:2500
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500
+```
+
+### `Get-WindowsActivation` cmdlet
+```powershell
+Install-Module slmgr-ps
+
+# Collects basic license of local computer, equal to slmgr.vbs /dli
+Get-WindowsActivation
+
+# Collects extended license of local computer, equal to slmgr.vbs /dlv
+Get-WindowsActivation -Extended
+
+# Collects basic license of computer WS01 over WinRM
+Get-WindowsActivation -Computer WS01
+
 ```
 ## About this module
 
@@ -42,11 +58,13 @@ If you need to activate a computer license, you had to:
 
 With this module, you trigger the activation by just typing `Start-WindowsActivation -Computer <array of hostnames>` remotely if WinRM is configured on the target. Or you can just do the same locally with `Start-WindowsActivation`.
 
+With `Get-WindowsActivation`, you can get similar results like `slmgr.vbs /dli` and `slmgr.vbs /dlv` but with the strength and flexbility of Powershell.
+
 ### The differences from `slmgr.vbs`
 
 - You can provide an array of computer names, and it is up to you how you get them. It's just PowerShell.
 - It works on PowerShell version 5.0 and above. It means PowerShell 7.0 is ok, too.
 - It uses WinRM for remote computers. Check if remote computers are accessible over WinRM.
-- It includes a list of KMS keys, so that you don't have to for most of them. It covers some of the versions, not all of them.
-- It works even if you disabled cscript and wscript- it's PowerShell!
+- It includes a list of KMS keys, so that you don't have to for most of them. It covers some of the versions though, not all of them.
+- It works even if you disabled `cscript` and `wscript` - it's PowerShell!
 - The code is documented and readable, so that you can improve according to your needs.
