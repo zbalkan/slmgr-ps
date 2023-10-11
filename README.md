@@ -40,7 +40,10 @@ Get-WindowsActivation -Computer WS01
 
 One of my hardening guideline is getting rid of vbscript in every environment.
 - I disabled `wscript` and `cscript` executables.
-- I changed the file-type association of `.vbs` to be opened with Notepad, no run record.
+![alt text](images/blocked.png "Blocked cscript and wscript")
+
+- I changed the file-type association of `.vbs` to be opened with Notepad, and cannot be executed.
+![alt text](images/notepad.png ".vbs extension is not an executable.")
 
 This caused me being unable to use `slmgr.vbs`, `OSPP.vbs`, some SCCM features like MDT. I started with `slmgr.vbs` as it was more important for me; I was migrating Windows 7 devices to Windows 10!
 
