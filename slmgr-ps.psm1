@@ -24,6 +24,8 @@ Start-WindowsActivation -Verbose # Activates the local computer
 Start-WindowsActivation -Computer WS01 # Activates the computer named WS01
 .EXAMPLE
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500 # Activates the computer named WS01 against server.domain.net:2500
+.EXAMPLE
+Start-WindowsActivation -ReArm # ReArm the trial period. ReArming already licensed devices can break current license issues. Guard clauses wil protect 99% but cannot guarantee 100%.
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
@@ -149,11 +151,11 @@ string[]. You can pass the computer names
 .OUTPUTS
 psobject. The number of properties depends on basic or extended mode.
 .EXAMPLE
-Get-WindowsActivation # Collects basic license of local computer, equal to slmgr.vbs /dli
+Get-WindowsActivation # Collects basic license information of local computer, equal to slmgr.vbs /dli
 .EXAMPLE
-Get-WindowsActivation -Extended # Collects extended license of local computer, equal to slmgr.vbs /dlv
+Get-WindowsActivation -Extended # Collects extended license information of local computer, equal to slmgr.vbs /dlv
 .EXAMPLE
-Get-WindowsActivation -Computer WS01 # Collects basic license of computer WS01 over WinRM
+Get-WindowsActivation -Computer WS01 # Collects basic license information of computer WS01 over WinRM
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
@@ -442,4 +444,192 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
         TrustedTime                = $trustedTime
     }
     return $result
+}
+        [Parameter()]
+        [string]
+        $Computer
+    )
+
+    $extendedQuery = 'SELECT Name,Description,ID,ApplicationID,ProductKeyID,ProductKeyChannel,OfflineInstallationId,UseLicenseURL,ValidationURL,PartialProductKey,LicenseStatus,RemainingAppReArmCount,RemainingSkuReArmCount,TrustedTime FROM SoftwareLicensingProduct
+WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+
+    if ($Computer -eq 'localhost')
+    {
+        $product = Get-CimInstance -Query $extendedQuery -Verbose
+    }
+    else
+    {
+        $product = Get-CimInstance -Query $extendedQuery -ComputerName $Computer
+    }
+    $name = $product.Name
+    $desc = $product.Description
+    $activationID = $product.ID
+    $applicationID = $product.ApplicationID
+    $pkID = $product.ProductKeyID
+    $pkChannel = $product.ProductKeyChannel
+    $installationID = $product.OfflineInstallationId
+    $licenseUrl = $product.UseLicenseURL
+    $validationUrl = $product.ValidationURL
+    $partial = $product.PartialProductKey
+    if ($null -eq $product -or $null -eq $product.LicenseStatus)
+    {
+        $status = [LicenseStatusCode]::Unknown
+    }
+    else
+    {
+        $status = [LicenseStatusCode]($product.LicenseStatus)
+    }
+    $remainingAppRearm = $product.RemainingAppReArmCount
+    $remainingSkuRearm = $product.RemainingSkuReArmCount
+    $trustedTime = [datetime]::Parse($product.Trustedtime)
+
+    $result = [PSCustomObject]@{
+        Name                       = $name
+        Description                = $desc
+        ActivationID               = $activationID
+        ApplicationID              = $applicationID
+        ProductKeyID               = $pkID
+        ProductKeyChannel          = $pkChannel
+        InstallationID             = $installationID
+        UseLicenseURL              = $licenseUrl
+        ValidationURL              = $validationUrl
+        PartialProductKey          = $partial
+        LicenseStatus              = $status
+        RemainingWindowsRearmCount = $remainingAppRearm
+        RemainingSkuRearmCount     = $remainingSkuRearm
+        TrustedTime                = $trustedTime
+    }
+    return $result
+}
+
+# Reference: https://rohnspowershellblog.wordpress.com/2013/06/15/converting-a-ciminstance-to-a-managementobject-and-back/
+function getCimPathFromInstance
+{
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [ciminstance] $InputObject
+    )
+
+    process
+    {
+        $Keys = $InputObject.CimClass.CimClassProperties |
+        Where-Object { $_.Qualifiers.Name -contains 'Key' } |
+        Select-Object Name, CimType |
+        Sort-Object Name
+
+        $KeyValuePairs = $Keys | ForEach-Object {
+
+            $KeyName = $_.Name
+            switch -regex ($_.CimType)
+            {
+                'Boolean|.Int\d+'
+                {
+                    # No quotes surrounding value:
+                    $Value = $InputObject.$KeyName
+                }
+
+                'DateTime'
+                {
+                    # Conver to WMI datetime
+                    $Value = '"{0}"' -f [System.Management.ManagementDateTimeConverter]::ToDmtfDateTime($InputObject.$KeyName)
+                }
+
+                'Reference'
+                {
+                    throw "CimInstance contains a key with type 'Reference'. This isn't currenlty supported (but can be added later)"
+                }
+
+                default
+                {
+                    # Treat it like a string and cross your fingers:
+                    $Value = '"{0}"' -f ($InputObject.$KeyName -replace "`"", "\`"")
+                }
+            }
+            '{0}={1}' -f $KeyName, $Value
+        }
+
+        if ($KeyValuePairs)
+        {
+            $KeyValuePairsString = '.{0}' -f ($KeyValuePairs -join ',')
+        }
+        else
+        {
+            # This is how WMI seems to handle paths with no keys
+            $KeyValuePairsString = '=@'
+        }
+
+        '\\{0}\{1}:{2}{3}' -f $InputObject.CimSystemProperties.ServerName,
+                               ($InputObject.CimSystemProperties.Namespace -replace '/', '\'),
+        $InputObject.CimSystemProperties.ClassName,
+        $KeyValuePairsString
+    }
+}
+
+function canRearm
+{
+    $status = (getLicenseStatus).LicenseStatus
+
+    # Any status exvept Licensed and Notification
+    $rearmableStatuses = @([LicenseStatusCode]::Unlicensed,
+        [LicenseStatusCode]::OOBGrace,
+        [LicenseStatusCode]::OOTGrace,
+        [LicenseStatusCode]::NonGenuineGrace,
+        [LicenseStatusCode]::ExtendedGrace)
+
+    Write-Verbose "Current license status: $status"
+    return ($status -in $rearmableStatuses)
+}
+
+function rearm
+{
+    param(
+        [string[]]$Computers
+    )
+
+    Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
+    foreach ($Computer in $Computers)
+    {
+        # Sanitize Computer name
+        $Computer = sanitizeComputerName -Computer $Computer
+        Write-Verbose "Computer name: $Computer"
+        if ($Computer -like 'localhost')
+        {
+            Write-Verbose 'Collecting data from local computer'
+            $serviceInstance = [wmi] (Get-CimInstance -ClassName SoftwareLicensingService | getCimPathFromInstance)
+        }
+        else
+        {
+            Write-Verbose 'Collecting data from remote computer'
+            $serviceInstance = [wmi] (Get-CimInstance -ClassName SoftwareLicensingService -ComputerName $Computer | getCimPathFromInstance)
+        }
+
+        $isRearmable = canRearm
+        Write-Verbose "Is rearmable: $isRearmable"
+
+        if ($isRearmable -eq $false)
+        {
+            Write-Verbose 'No need to rearm.'
+            continue
+        }
+
+        if ($product.LicenseStatus -eq [LicenseStatusCode]::Unknown)
+        {
+            Write-Error 'License status cannot be collected. It is suggested to restart computer.'
+            continue
+        }
+
+        try
+        {
+            [void]$serviceInstance.ReArmWindows()
+            [void]$serviceInstance.RefreshLicenseStatus()
+            Write-Verbose 'Command completed successfully.'
+            Write-Verbose 'Please restart the system for the changes to take effect.'
+        }
+        catch [System.Management.Automation.MethodInvocationException]
+        {
+            Write-Error 'Rearm failed.'
+        }
+    }
 }

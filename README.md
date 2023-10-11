@@ -6,10 +6,14 @@ A drop in replacement for slmgr script
 
 ## Usage
 
-### `Start-WindowsActivation` cmdlet
+### Installation
+
 ```powershell
 Install-Module slmgr-ps
+```
 
+### `Start-WindowsActivation` cmdlet
+```powershell
 Start-WindowsActivation -WhatIf
 
 # Activates the local computer
@@ -20,19 +24,21 @@ Start-WindowsActivation -Computer WS01
 
 # Activates the computer named WS01 against server.domain.net:2500
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500
+
+# ReArm the trial period. ReArming already licensed devices can break current license issues.
+# Guard clauses wil protect 99% but cannot guarantee 100%.
+Start-WindowsActivation -ReArm
 ```
 
 ### `Get-WindowsActivation` cmdlet
 ```powershell
-Install-Module slmgr-ps
-
-# Collects basic license of local computer, equal to slmgr.vbs /dli
+# Collects basic license information of local computer, equal to slmgr.vbs /dli
 Get-WindowsActivation
 
-# Collects extended license of local computer, equal to slmgr.vbs /dlv
+# Collects extended license informationof local computer, equal to slmgr.vbs /dlv
 Get-WindowsActivation -Extended
 
-# Collects basic license of computer WS01 over WinRM
+# Collects basic license information of computer WS01 over WinRM
 Get-WindowsActivation -Computer WS01
 
 ```
