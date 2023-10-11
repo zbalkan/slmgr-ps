@@ -208,7 +208,7 @@ function global:Get-WindowsActivation
 
 
 
-# Private functions
+#region Private functions
 
 # Enum for a meaningful check. Reference: https://docs.microsoft.com/en-us/previous-versions/windows/desktop/sppwmi/softwarelicensingproduct
 enum LicenseStatusCode
@@ -445,62 +445,6 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     }
     return $result
 }
-        [Parameter()]
-        [string]
-        $Computer
-    )
-
-    $extendedQuery = 'SELECT Name,Description,ID,ApplicationID,ProductKeyID,ProductKeyChannel,OfflineInstallationId,UseLicenseURL,ValidationURL,PartialProductKey,LicenseStatus,RemainingAppReArmCount,RemainingSkuReArmCount,TrustedTime FROM SoftwareLicensingProduct
-WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
-
-    if ($Computer -eq 'localhost')
-    {
-        $product = Get-CimInstance -Query $extendedQuery -Verbose
-    }
-    else
-    {
-        $product = Get-CimInstance -Query $extendedQuery -ComputerName $Computer
-    }
-    $name = $product.Name
-    $desc = $product.Description
-    $activationID = $product.ID
-    $applicationID = $product.ApplicationID
-    $pkID = $product.ProductKeyID
-    $pkChannel = $product.ProductKeyChannel
-    $installationID = $product.OfflineInstallationId
-    $licenseUrl = $product.UseLicenseURL
-    $validationUrl = $product.ValidationURL
-    $partial = $product.PartialProductKey
-    if ($null -eq $product -or $null -eq $product.LicenseStatus)
-    {
-        $status = [LicenseStatusCode]::Unknown
-    }
-    else
-    {
-        $status = [LicenseStatusCode]($product.LicenseStatus)
-    }
-    $remainingAppRearm = $product.RemainingAppReArmCount
-    $remainingSkuRearm = $product.RemainingSkuReArmCount
-    $trustedTime = [datetime]::Parse($product.Trustedtime)
-
-    $result = [PSCustomObject]@{
-        Name                       = $name
-        Description                = $desc
-        ActivationID               = $activationID
-        ApplicationID              = $applicationID
-        ProductKeyID               = $pkID
-        ProductKeyChannel          = $pkChannel
-        InstallationID             = $installationID
-        UseLicenseURL              = $licenseUrl
-        ValidationURL              = $validationUrl
-        PartialProductKey          = $partial
-        LicenseStatus              = $status
-        RemainingWindowsRearmCount = $remainingAppRearm
-        RemainingSkuRearmCount     = $remainingSkuRearm
-        TrustedTime                = $trustedTime
-    }
-    return $result
-}
 
 # Reference: https://rohnspowershellblog.wordpress.com/2013/06/15/converting-a-ciminstance-to-a-managementobject-and-back/
 function getCimPathFromInstance
@@ -633,3 +577,4 @@ function rearm
         }
     }
 }
+#endregion
