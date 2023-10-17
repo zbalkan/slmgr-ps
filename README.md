@@ -60,19 +60,52 @@ I wrote a PowerShell script based on the `slmgr.vbs`. It's long but easy to read
 
 I converted this simple, one-cmdlet script to a module and published it so anyone can use it easily.
 
-### How?
+### Comparison
 
-If you need to activate a computer license, you had to:
-- Find the key for your product
-- Type `slmgr.vbs /ipk <5x5 key for the product>`
-- Type `slmgr.vbs /ato`
-- Repeat the same for each host locally
+| slmgr slmgr.vbs                       | slmgr-ps   | Notes |
+|---------------------------------------|------------|-------|
+| slmgr machinename                     | -Computers                                                                      | Instead of one, you can provide multiple computer names. |
+| slmgr username                        | not implemented                                                                 | It will not be implemented as is. The command uses the current user's credentials. In the future, it can ask for credentials. Reference. CWE-214: Invocation of Process Using Visible Sensitive Information
+| slmgr password                        | not implemented                                                                 | It will not be implemented as is. The command uses the current user's credentials. In the future, it can ask for credentials. Reference. CWE-214: Invocation of Process Using Visible Sensitive Information
+| slmgr /ipk zfgwx-zvc9b-646c9-t64zx    | Start-WindowsActivation                                                         | No need for KMS keys |
+| slmgr /ato                            | Start-WindowsActivation                                                         | no need for calling /ato separately |
+| slmgr /rearm                          | Start-WindowsActivation -Rearm                                                  | |
+| slmgr /dli                            | Get-WindowsActivation                                                           | |
+| slmgr /dlv                            | Get-WindowsActivation -Extended                                                 | |
+| slmgr /ckhc                           | Start-WindowsActivation -CacheEnabled $false                                    | |
+| slmgr /skhc                           | Start-WindowsActivation -CacheEnabled $true                                     | KMS cache is enabled by default   |
+| slmgr /skms activationservername:port | Start-WindowsActivation -KMSServerFQDN activationservername -KMSServerPort port | |
+| slmgr /ad                             | not implemented                                                                 | |
+| slmgr /ad                             | not implemented                                                                 | |
+| slmgr /ao                             | not implemented                                                                 | |
+| slmgr /del                            | not implemented                                                                 | |
+| slmgr /atp                            | not implemented                                                                 | |
+| slmgr /skms-domain                    | not implemented                                                                 | |
+| slmgr /ckms                           | not implemented                                                                 | |
+| slmgr /ckms                           | not implemented                                                                 | |
+| slmgr /cpky                           | not implemented                                                                 | |
+| slmgr /dti                            | not implemented                                                                 | |
+| slmgr /ilc                            | not implemented                                                                 | |
+| slmgr /rilc                           | not implemented                                                                 | |
+| slmgr /rearm-app                      | not implemented                                                                 | |
+| slmgr /rearm-sku                      | not implemented                                                                 | |
+| slmgr /sai                            | not implemented                                                                 | |
+| slmgr /sri                            | not implemented                                                                 | |
+| slmgr /spri                           | not implemented                                                                 | |
+| slmgr /cpri                           | not implemented                                                                 | |
+| slmgr /sprt                           | not implemented                                                                 | |
+| slmgr /sdns                           | not implemented                                                                 | |
+| slmgr /cdns                           | not implemented                                                                 | |
+| slmgr /upk                            | not implemented                                                                 | |
+| slmgr /xpr                            | not implemented                                                                 | |
+| slmgr /lil                            | not implemented                                                                 | |
+| slmgr /ril                            | not implemented                                                                 | |
+| slmgr /stao                           | not implemented                                                                 | |
+| slmgr /ctao                           | not implemented                                                                 | |
+| slmgr /ltc                            | not implemented                                                                 | |
+| slmgr /fta                            | not implemented                                                                 | |
 
-With this module, you trigger the activation by just typing `Start-WindowsActivation -Computer <array of hostnames>` remotely if WinRM is configured on the target. Or you can just do the same locally with `Start-WindowsActivation`.
-
-With `Get-WindowsActivation`, you can get similar results like `slmgr.vbs /dli` and `slmgr.vbs /dlv` but with the strength and flexbility of Powershell.
-
-### The differences from `slmgr.vbs`
+### The design differences from `slmgr.vbs`
 
 - You can provide an array of computer names, and it is up to you how you get them. It's just PowerShell.
 - It works on PowerShell version 5.0 and above. It means PowerShell 7.0 is ok, too.
