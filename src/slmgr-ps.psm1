@@ -23,6 +23,8 @@ Start-WindowsActivation -Verbose # Activates the local computer
 .EXAMPLE
 Start-WindowsActivation -Computer WS01 # Activates the computer named WS01
 .EXAMPLE
+Start-WindowsActivation -Computer WS01, WS02 -CacheEnabled $false # Disabled the KMS cache for the computers named WS01 and WS02 and . Cache is enabled by default.
+.EXAMPLE
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500 # Activates the computer named WS01 against server.domain.net:2500
 .EXAMPLE
 Start-WindowsActivation -ReArm # ReArm the trial period. ReArming already licensed devices can break current license issues. Guard clauses wil protect 99% but cannot guarantee 100%.
@@ -77,62 +79,67 @@ function global:Start-WindowsActivation
             ParameterSetName = 'SpecifyKMSServer')]
         [ValidateRange(1, 65535)]
         [int]
-        $KMSServerPort = 1688
+        $KMSServerPort = 1688,
+
+        [Parameter(Mandatory = $false,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'Rearm')]
+        [switch]
+        $Rearm,
+
+        [Parameter(Mandatory = $false,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'Cache')]
+        [bool]
+        $CacheEnabled
     )
     Begin
     {
     }
     Process
     {
-        if ($pscmdlet.ShouldProcess('Computer', 'Activate license via KMS'))
+        if ($pscmdlet.ShouldProcess($Computers -join ', ', 'Activate license via KMS'))
         {
             $ErrorActionPreference = 'Stop'
             Write-Verbose 'ErrorActionPreference: Stop'
 
-            Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
-            foreach ($Computer in $Computers)
+            # Rearm can be run on trial versions only.
+            # Try rearm and exit early.
+            if ($PSCmdlet.ParameterSetName -eq 'Rearm')
             {
-
-                # Sanitize Computer name
-                $Computer = sanitizeComputerName -Computer $Computer
-                Write-Verbose "Computer name: $Computer"
-
-                # Check Windows Activation Status
-                $product = getLicenseStatus -Computer $Computer
-                Write-Verbose "License Status: $($product.Status)"
-                if ($product.Activated) { Write-Warning 'The product is already activated.'; continue; }
-
-                # Get product key
-                $productKey = getProductKey -Computer $Computer
-                Write-Verbose "Product Key (for KMS): $productKey"
-
-                # Activate Windows
-                if ($productKey -eq 'Unknown')
+                try
                 {
-                    Write-Error 'Unknown OS.'
+                    rearm -Computers $Computers
+                    exit 0
                 }
-                else
+                catch
                 {
-                    if ($PSCmdlet.ParameterSetName -eq 'SpecifyKMSServer')
-                    {
-                        activateWithParams -Computer $Computer -ProductKey $productKey -KeyServerName $KMSServerFQDN -KeyServerPort $KMSServerPort
-                    }
-                    else
-                    {
-                        activateWithDNS -Computer $Computer -ProductKey $productKey
-                    }
-
-                    $product = getLicenseStatus -Computer $Computer
-                    if ($product.Activated)
-                    {
-                        Write-Verbose "The computer activated succesfully. Current status: $($product.LicenseStatus)"
-                    }
-                    else
-                    {
-                        Write-Error "Activation failed. Current status: $($product.LicenseStatus)"
-                    }
+                    exit 1
                 }
             }
+
+            # No rearm, continue with activating.
+
+            # Set KMS cache preference
+            if ($PSCmdlet.ParameterSetName -eq 'Cache')
+            {
+                try
+                {
+                    manageCache -Computer $Computer -Enabled $CacheEnabled
+                    exit 0
+                }
+                catch
+                {
+                    exit 1
+                }
+            }
+
+            # Activation
+            activate -Computers $Computers -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort
         }
     }
     End
@@ -358,6 +365,60 @@ function activateWithParams
     Start-Sleep -Seconds 2 # It also takes time.
 }
 
+
+function activate
+{
+    param(
+        [string[]]$Computers,
+        [string]$KMSServerFQDN,
+        [int]$KMSServerPort
+    )
+
+    Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
+    foreach ($Computer in $Computers)
+    {
+
+        # Sanitize Computer name
+        $Computer = sanitizeComputerName -Computer $Computer
+        Write-Verbose "Computer name: $Computer"
+
+        # Check Windows Activation Status
+        $product = getLicenseStatus -Computer $Computer
+        Write-Verbose "License Status: $($product.Status)"
+        if ($product.Activated) { Write-Warning 'The product is already activated.'; continue; }
+
+        # Get product key
+        $productKey = getProductKey -Computer $Computer
+        Write-Verbose "Product Key (for KMS): $productKey"
+
+        # Activate Windows
+        if ($productKey -eq 'Unknown')
+        {
+            Write-Error 'Unknown OS.'
+        }
+        else
+        {
+            if ($PSCmdlet.ParameterSetName -eq 'SpecifyKMSServer')
+            {
+                activateWithParams -Computer $Computer -ProductKey $productKey -KeyServerName $KMSServerFQDN -KeyServerPort $KMSServerPort
+            }
+            else
+            {
+                activateWithDNS -Computer $Computer -ProductKey $productKey
+            }
+
+            $product = getLicenseStatus -Computer $Computer
+            if ($product.Activated)
+            {
+                Write-Verbose "The computer activated succesfully. Current status: $($product.LicenseStatus)"
+            }
+            else
+            {
+                Write-Error "Activation failed. Current status: $($product.LicenseStatus)"
+            }
+        }
+    }
+}
 function getBasicLicenseInformation
 {
     [CmdletBinding()]
@@ -576,5 +637,31 @@ function rearm
             Write-Error 'Rearm failed.'
         }
     }
+}
+
+function manageCache
+{
+    param(
+        [string]$Computer,
+        [bool]$Enabled
+    )
+    if ($Computer -eq 'localhost')
+    {
+        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService'
+    }
+    else
+    {
+        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer
+    }
+
+    if ($Enabled)
+    {
+        $service.DisableKeyManagementServiceHostCaching(0) > $null # Disable caching
+    }
+    else
+    {
+        $service.DisableKeyManagementServiceHostCaching(1) > $null # Disable caching
+    }
+
 }
 #endregion
