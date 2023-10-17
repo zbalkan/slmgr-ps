@@ -22,6 +22,9 @@ Start-WindowsActivation -Verbose
 # Activates the computer named WS01
 Start-WindowsActivation -Computer WS01
 
+# Disabled the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
+Start-WindowsActivation -Computer WS01, WS02 -CacheEnabled $false
+
 # Activates the computer named WS01 against server.domain.net:2500
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500
 

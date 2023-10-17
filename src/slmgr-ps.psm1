@@ -23,7 +23,7 @@ Start-WindowsActivation -Verbose # Activates the local computer
 .EXAMPLE
 Start-WindowsActivation -Computer WS01 # Activates the computer named WS01
 .EXAMPLE
-Start-WindowsActivation -Computer WS01, WS02 -CacheEnabled $false # Disabled the KMS cache for the computers named WS01 and WS02 and . Cache is enabled by default.
+Start-WindowsActivation -Computer WS01, WS02 -CacheEnabled $false # Disabled the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
 .EXAMPLE
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500 # Activates the computer named WS01 against server.domain.net:2500
 .EXAMPLE
