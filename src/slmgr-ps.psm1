@@ -35,7 +35,7 @@ function global:Start-WindowsActivation
 {
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $false,
-        ConfirmImpact = 'Medium',
+        ConfirmImpact = 'High',
         DefaultParameterSetName = 'default')]
     Param
     (
