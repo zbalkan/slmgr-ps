@@ -2,7 +2,7 @@
 
 A drop in replacement for slmgr script
 
-**NB:** Currently the features are limited to KMS scenarios.
+**NB:** Currently the features are limited to KMS scenarios. See [Comparison](#comparison) for details.
 
 ## Usage
 
