@@ -21,7 +21,7 @@ None if successful. Error message if there is an error.
 .EXAMPLE
 Start-WindowsActivation -Verbose # Activates the local computer
 .EXAMPLE
-Start-WindowsActivation -Computer WS01 # Activates the computer named WS01
+Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Activates the computer named WS01 using different credentials
 .EXAMPLE
 Start-WindowsActivation -Computer WS01, WS02 -CacheEnabled $false # Disabled the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
 .EXAMPLE
@@ -47,6 +47,15 @@ function global:Start-WindowsActivation
             ValueFromRemainingArguments = $false)]
         [string[]]
         $Computers = @('localhost'),
+
+        # Define credentials other than current user if needed
+        [Parameter(Mandatory = $false,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'default')]
+        [PSCredential]
+        $Credentials,
 
         [Parameter(Mandatory = $false,
             Position = 1,
@@ -99,51 +108,61 @@ function global:Start-WindowsActivation
     )
     Begin
     {
+        $ErrorActionPreference = 'Stop'
+        Write-Verbose 'ErrorActionPreference: Stop'
     }
     Process
     {
         if ($pscmdlet.ShouldProcess($Computers -join ', ', 'Activate license via KMS'))
         {
-            $ErrorActionPreference = 'Stop'
-            Write-Verbose 'ErrorActionPreference: Stop'
+            Write-Verbose 'Creating new CimSession'
+            $session = getSession -Credentials $Credentials -Computers $Computers
 
-            # Rearm can be run on trial versions only.
-            # Try rearm and exit early.
-            if ($PSCmdlet.ParameterSetName -eq 'Rearm')
+            Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
+            foreach ($Computer in $Computers)
             {
-                try
+                # Sanitize Computer name
+                $Computer = sanitizeComputerName -Computer $Computer
+                Write-Verbose "Computer name: $Computer"
+                # Rearm can be run on trial versions only.
+                # Try rearm and exit early.
+                if ($PSCmdlet.ParameterSetName -eq 'Rearm')
                 {
-                    rearm -Computers $Computers
-                    exit 0
+                    try
+                    {
+                        rearm -Computer $Computer
+                        exit 0
+                    }
+                    catch
+                    {
+                        exit 1
+                    }
                 }
-                catch
+
+                # No rearm, continue with activating.
+
+                # Set KMS cache preference
+                if ($PSCmdlet.ParameterSetName -eq 'Cache')
                 {
-                    exit 1
+                    try
+                    {
+                        manageCache -Computer $Computer -Enabled $CacheEnabled -Session $session
+                        exit 0
+                    }
+                    catch
+                    {
+                        exit 1
+                    }
                 }
+
+                # Activation
+                activate -Computer $Computer -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort
             }
-
-            # No rearm, continue with activating.
-
-            # Set KMS cache preference
-            if ($PSCmdlet.ParameterSetName -eq 'Cache')
-            {
-                try
-                {
-                    manageCache -Computer $Computer -Enabled $CacheEnabled
-                    exit 0
-                }
-                catch
-                {
-                    exit 1
-                }
-            }
-
-            # Activation
-            activate -Computers $Computers -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort
         }
     }
     End
     {
+        Remove-CimSession -CimSession $session
     }
 }
 
@@ -165,6 +184,8 @@ Get-WindowsActivation -Extended # Collects extended license information of local
 Get-WindowsActivation -Expiry # Collects license expiration information of local computer, equal to slmgr.vbs /xpr
 .EXAMPLE
 Get-WindowsActivation -Computer WS01 # Collects basic license information of computer WS01 over WinRM
+.EXAMPLE
+Get-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Collects basic license information of computer WS01 over WinRM using different credentials
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
@@ -182,6 +203,15 @@ function global:Get-WindowsActivation
         [string[]]
         $Computers = @('localhost'),
 
+        # Define credentials other than current user if needed
+        [Parameter(Mandatory = $false,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'default')]
+        [PSCredential]
+        $Credentials,
+
         [Parameter(Mandatory = $false, ParameterSetName = 'Extended')]
         [switch]$Extended,
 
@@ -196,6 +226,9 @@ function global:Get-WindowsActivation
     {
         if ($pscmdlet.ShouldProcess('Computer', 'Collect license information'))
         {
+            Write-Verbose 'Creating new CimSession'
+            $session = getSession -Credentials $Credentials -Computers $Computers
+
             Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
             foreach ($Computer in $Computers)
             {
@@ -220,13 +253,14 @@ function global:Get-WindowsActivation
     }
     End
     {
+        Remove-CimSession -CimSession $session
     }
 }
 
 
-
 #region Private functions
 
+#region Data structures
 # Enum for a meaningful check. Reference: https://docs.microsoft.com/en-us/previous-versions/windows/desktop/sppwmi/softwarelicensingproduct
 enum LicenseStatusCode
 {
@@ -238,61 +272,218 @@ enum LicenseStatusCode
     Notification
     ExtendedGrace
 }
+#endregion Data structures
 
-function getLicenseStatus
+#region Activation functions
+
+function activate
 {
     param(
-        [string]$Computer
+        [string[]]$Computer,
+        [string]$KMSServerFQDN,
+        [int]$KMSServerPort,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
     )
 
-    $query = 'SELECT LicenseStatus FROM SoftwareLicensingProduct
-WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+    # Check Windows Activation Status
+    $product = getLicenseStatus -Computer $Computer -Session $Session
+    Write-Verbose "License Status: $($product.Status)"
+    if ($product.Activated) { Write-Warning 'The product is already activated.'; continue; }
+
+    # Get product key
+    $productKey = getProductKey -Computer $Computer -Session $Session
+    Write-Verbose "Product Key (for KMS): $productKey"
+
+    # Activate Windows
+    if ($productKey -eq 'Unknown')
+    {
+        Write-Error 'Unknown OS.'
+    }
+    else
+    {
+        if ($PSCmdlet.ParameterSetName -eq 'SpecifyKMSServer')
+        {
+            activateWithParams -Computer $Computer -ProductKey $productKey -KeyServerName $KMSServerFQDN -KeyServerPort $KMSServerPort -Session $Session
+        }
+        else
+        {
+            activateWithDNS -Computer $Computer -ProductKey $productKey -Session $Session
+        }
+
+        $product = getLicenseStatus -Computer $Computer -Session $Session
+        if ($product.Activated)
+        {
+            Write-Verbose "The computer activated succesfully. Current status: $($product.LicenseStatus)"
+        }
+        else
+        {
+            Write-Error "Activation failed. Current status: $($product.LicenseStatus)"
+        }
+    }
+}
+
+function activateWithDNS
+{
+    param(
+        [string]$Computer,
+        [string]$ProductKey,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
+    )
     if ($Computer -eq 'localhost')
     {
-        $product = Get-CimInstance -Query $query
+        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -CimSession $Session
     }
     else
     {
-        $product = Get-CimInstance -Query $query -ComputerName $Computer
+        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer -CimSession $Session
     }
-    $status = [LicenseStatusCode]( $product | Select-Object LicenseStatus).LicenseStatus
-    $activated = $status -eq [LicenseStatusCode]::Licensed
-    $result = [PSCustomObject]@{
-        LicenseStatus = $status
-        Activated     = $activated
-    }
-    return $result
+
+    $service.InstallProductKey($ProductKey) > $null
+    Start-Sleep -Seconds 10 # Installing product key takes time.
+    $service.RefreshLicenseStatus() > $null
+    Start-Sleep -Seconds 2 # It also takes time.
 }
 
-function sanitizeComputerName
+function activateWithParams
 {
     param(
-        [string]$Computer
+        [string]$Computer,
+        [string]$ProductKey,
+        [string]$KeyServerName,
+        [int]$KeyServerPort,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
     )
-    if ($Computer -eq '.' -or $Computer -eq '127.0.0.1' -or $null -eq $Computer)
+    if ($Computer -eq 'localhost')
     {
-        return 'localhost'
+        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -CimSession $Session
     }
     else
     {
-        return $Computer
+        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer -CimSession $Session
+    }
+
+    $service.SetKeyManagementServiceMachine($KeyServerName)
+    $service.SetKeyManagementServicePort($KeyServerPort)
+
+    $service.InstallProductKey($ProductKey) > $null
+    Start-Sleep -Seconds 10 # Installing product key takes time.
+    $service.RefreshLicenseStatus() > $null
+    Start-Sleep -Seconds 2 # It also takes time.
+}
+
+
+function rearm
+{
+    param(
+        [string]$Computer,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
+    )
+
+    if ($Computer -like 'localhost')
+    {
+        Write-Verbose 'Collecting data from local computer'
+        $serviceInstance = [wmi] (Get-CimInstance -ClassName SoftwareLicensingService -CimSession $Session | getCimPathFromInstance)
+    }
+    else
+    {
+        Write-Verbose 'Collecting data from remote computer'
+        $serviceInstance = [wmi] (Get-CimInstance -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | getCimPathFromInstance)
+    }
+
+    $isRearmable = canRearm -Computer $Computer -Session $Session
+    Write-Verbose "Is rearmable: $isRearmable"
+
+    if ($isRearmable -eq $false)
+    {
+        Write-Verbose 'No need to rearm.'
+        continue
+    }
+
+    if ($product.LicenseStatus -eq [LicenseStatusCode]::Unknown)
+    {
+        Write-Error 'License status cannot be collected. It is suggested to restart computer.'
+        continue
+    }
+
+    try
+    {
+        [void]$serviceInstance.ReArmWindows()
+        [void]$serviceInstance.RefreshLicenseStatus()
+        Write-Verbose 'Command completed successfully.'
+        Write-Verbose 'Please restart the system for the changes to take effect.'
+    }
+    catch [System.Management.Automation.MethodInvocationException]
+    {
+        Write-Error 'Rearm failed.'
     }
 }
+
+function canRearm
+{
+    param(
+        [string]$Computer,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
+    )
+
+    $status = (getLicenseStatus -Computer $Computer -Session $Session).LicenseStatus
+
+    # Any status exvept Licensed and Notification
+    $rearmableStatuses = @([LicenseStatusCode]::Unlicensed,
+        [LicenseStatusCode]::OOBGrace,
+        [LicenseStatusCode]::OOTGrace,
+        [LicenseStatusCode]::NonGenuineGrace,
+        [LicenseStatusCode]::ExtendedGrace)
+
+    Write-Verbose "Current license status: $status"
+    return ($status -in $rearmableStatuses)
+}
+
+function manageCache
+{
+    param(
+        [string]$Computer,
+        [bool]$Enabled,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
+    )
+    if ($Computer -eq 'localhost')
+    {
+        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -CimSession $Session
+    }
+    else
+    {
+        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer -CimSession $Session
+    }
+
+    if ($Enabled)
+    {
+        $service.DisableKeyManagementServiceHostCaching(0) > $null # Disable caching
+    }
+    else
+    {
+        $service.DisableKeyManagementServiceHostCaching(1) > $null # Disable caching
+    }
+
+}
+
+#endregion Activation functions
+
+#region Information functions
 
 # KMS Client License Keys - https://docs.microsoft.com/en-us/windows-server/get-started/kmsclientkeys
 # Add as you wish
 function getProductKey
 {
     param(
-        [string]$Computer
+        [string]$Computer,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
     )
     if ($Computer -eq 'localhost')
     {
-        $OsVersion = ((Get-CimInstance -Class Win32_OperatingSystem).Caption)
+        $OsVersion = ((Get-CimInstance -Class Win32_OperatingSystem -CimSession $Session).Caption)
     }
     else
     {
-        $OsVersion = ((Get-CimInstance -Class Win32_OperatingSystem -ComputerName $Computer).Caption)
+        $OsVersion = ((Get-CimInstance -Class Win32_OperatingSystem -ComputerName $Computer -CimSession $Session).Caption)
     }
 
     $productKey = switch -Wildcard ($OsVersion)
@@ -328,114 +519,37 @@ function getProductKey
     return $productKey
 }
 
-function activateWithDNS
+function getLicenseStatus
 {
     param(
         [string]$Computer,
-        [string]$ProductKey
+        [Microsoft.Management.Infrastructure.CimSession]$Session
     )
+
+    $query = 'SELECT LicenseStatus FROM SoftwareLicensingProduct
+WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     if ($Computer -eq 'localhost')
     {
-        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService'
+        $product = Get-CimInstance -Query $query -CimSession $Session
     }
     else
     {
-        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer
+        $product = Get-CimInstance -Query $query -ComputerName $Computer -CimSession $Session
     }
-
-    $service.InstallProductKey($ProductKey) > $null
-    Start-Sleep -Seconds 10 # Installing product key takes time.
-    $service.RefreshLicenseStatus() > $null
-    Start-Sleep -Seconds 2 # It also takes time.
+    $status = [LicenseStatusCode]( $product | Select-Object LicenseStatus).LicenseStatus
+    $activated = $status -eq [LicenseStatusCode]::Licensed
+    $result = [PSCustomObject]@{
+        LicenseStatus = $status
+        Activated     = $activated
+    }
+    return $result
 }
 
-function activateWithParams
-{
-    param(
-        [string]$Computer,
-        [string]$ProductKey,
-        [string]$KeyServerName,
-        [int]$KeyServerPort
-    )
-    if ($Computer -eq 'localhost')
-    {
-        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService'
-    }
-    else
-    {
-        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer
-    }
-
-    $service.SetKeyManagementServiceMachine($KeyServerName)
-    $service.SetKeyManagementServicePort($KeyServerPort)
-
-    $service.InstallProductKey($ProductKey) > $null
-    Start-Sleep -Seconds 10 # Installing product key takes time.
-    $service.RefreshLicenseStatus() > $null
-    Start-Sleep -Seconds 2 # It also takes time.
-}
-
-
-function activate
-{
-    param(
-        [string[]]$Computers,
-        [string]$KMSServerFQDN,
-        [int]$KMSServerPort
-    )
-
-    Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
-    foreach ($Computer in $Computers)
-    {
-
-        # Sanitize Computer name
-        $Computer = sanitizeComputerName -Computer $Computer
-        Write-Verbose "Computer name: $Computer"
-
-        # Check Windows Activation Status
-        $product = getLicenseStatus -Computer $Computer
-        Write-Verbose "License Status: $($product.Status)"
-        if ($product.Activated) { Write-Warning 'The product is already activated.'; continue; }
-
-        # Get product key
-        $productKey = getProductKey -Computer $Computer
-        Write-Verbose "Product Key (for KMS): $productKey"
-
-        # Activate Windows
-        if ($productKey -eq 'Unknown')
-        {
-            Write-Error 'Unknown OS.'
-        }
-        else
-        {
-            if ($PSCmdlet.ParameterSetName -eq 'SpecifyKMSServer')
-            {
-                activateWithParams -Computer $Computer -ProductKey $productKey -KeyServerName $KMSServerFQDN -KeyServerPort $KMSServerPort
-            }
-            else
-            {
-                activateWithDNS -Computer $Computer -ProductKey $productKey
-            }
-
-            $product = getLicenseStatus -Computer $Computer
-            if ($product.Activated)
-            {
-                Write-Verbose "The computer activated succesfully. Current status: $($product.LicenseStatus)"
-            }
-            else
-            {
-                Write-Error "Activation failed. Current status: $($product.LicenseStatus)"
-            }
-        }
-    }
-}
 function getBasicLicenseInformation
 {
-    [CmdletBinding()]
     param (
-        [Parameter()]
-        [string]
-        $Computer
+        [string]$Computer,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
     )
 
     $basicQuery = 'SELECT Name,Description,PartialProductKey,LicenseStatus FROM SoftwareLicensingProduct
@@ -443,11 +557,11 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
     if ($Computer -eq 'localhost')
     {
-        $product = Get-CimInstance -Query $basicQuery
+        $product = Get-CimInstance -Query $basicQuery -CimSession $Session
     }
     else
     {
-        $product = Get-CimInstance -Query $basicQuery -ComputerName $Computer
+        $product = Get-CimInstance -Query $basicQuery -ComputerName $Computer -CimSession $Session
     }
     $name = $product.Name
     $desc = $product.Description
@@ -465,11 +579,9 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
 function getExtendedLicenseInformation
 {
-    [CmdletBinding()]
     param (
-        [Parameter()]
-        [string]
-        $Computer
+        [string]$Computer,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
     )
 
     $extendedQuery = 'SELECT Name,Description,ID,ApplicationID,ProductKeyID,ProductKeyChannel,OfflineInstallationId,UseLicenseURL,ValidationURL,PartialProductKey,LicenseStatus,RemainingAppReArmCount,RemainingSkuReArmCount,TrustedTime FROM SoftwareLicensingProduct
@@ -477,11 +589,11 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
     if ($Computer -eq 'localhost')
     {
-        $product = Get-CimInstance -Query $extendedQuery
+        $product = Get-CimInstance -Query $extendedQuery -CimSession $Session
     }
     else
     {
-        $product = Get-CimInstance -Query $extendedQuery -ComputerName $Computer
+        $product = Get-CimInstance -Query $extendedQuery -ComputerName $Computer -CimSession $Session
     }
     $name = $product.Name
     $desc = $product.Description
@@ -519,11 +631,9 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
 function getExpiryInformation
 {
-    [CmdletBinding()]
     param (
-        [Parameter()]
-        [string]
-        $Computer
+        [string]$Computer,
+        [Microsoft.Management.Infrastructure.CimSession]$Session
     )
 
     $expiryQuery = 'SELECT ID, ApplicationId, PartialProductKey, LicenseIsAddon, Description, Name, LicenseStatus, GracePeriodRemaining FROM SoftwareLicensingProduct
@@ -531,11 +641,11 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
     if ($Computer -eq 'localhost')
     {
-        $product = Get-CimInstance -Query $expiryQuery
+        $product = Get-CimInstance -Query $expiryQuery -CimSession $Session
     }
     else
     {
-        $product = Get-CimInstance -Query $expiryQuery -ComputerName $Computer
+        $product = Get-CimInstance -Query $expiryQuery -ComputerName $Computer -CimSession $Session
     }
     $name = $product.Name
     $status = [LicenseStatusCode]($product.LicenseStatus)
@@ -582,6 +692,62 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
         ExpirationInformation = $expirationInfo
     }
     return $result
+}
+
+
+
+
+#endregion Information functions
+
+#region Utility functions
+
+function sanitizeComputerName
+{
+    param(
+        [string]$Computer
+    )
+    if ($Computer -eq '.' -or $Computer -eq '127.0.0.1' -or $null -eq $Computer)
+    {
+        return 'localhost'
+    }
+    else
+    {
+        return $Computer
+    }
+}
+
+function getSession
+{
+    param (
+        [PSCredential]
+        $Credentials,
+        [string[]]
+        $Computers
+    )
+
+    if ($Computers -eq @('localhost'))
+    {
+        if ($null -eq $Credentials)
+        {
+            $session = New-CimSession
+        }
+        else
+        {
+            $session = New-CimSession -Credential $Credentials
+        }
+    }
+    else
+    {
+        if ($null -eq $Credentials)
+        {
+            $session = New-CimSession -ComputerName $Computers
+        }
+        else
+        {
+            $session = New-CimSession -Credential $Credentials -ComputerName $Computers
+        }
+    }
+    return $session
 }
 
 # Reference: https://rohnspowershellblog.wordpress.com/2013/06/15/converting-a-ciminstance-to-a-managementobject-and-back/
@@ -648,97 +814,6 @@ function getCimPathFromInstance
         $KeyValuePairsString
     }
 }
+#endregion Utility functions
 
-function canRearm
-{
-    $status = (getLicenseStatus).LicenseStatus
-
-    # Any status exvept Licensed and Notification
-    $rearmableStatuses = @([LicenseStatusCode]::Unlicensed,
-        [LicenseStatusCode]::OOBGrace,
-        [LicenseStatusCode]::OOTGrace,
-        [LicenseStatusCode]::NonGenuineGrace,
-        [LicenseStatusCode]::ExtendedGrace)
-
-    Write-Verbose "Current license status: $status"
-    return ($status -in $rearmableStatuses)
-}
-
-function rearm
-{
-    param(
-        [string[]]$Computers
-    )
-
-    Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
-    foreach ($Computer in $Computers)
-    {
-        # Sanitize Computer name
-        $Computer = sanitizeComputerName -Computer $Computer
-        Write-Verbose "Computer name: $Computer"
-        if ($Computer -like 'localhost')
-        {
-            Write-Verbose 'Collecting data from local computer'
-            $serviceInstance = [wmi] (Get-CimInstance -ClassName SoftwareLicensingService | getCimPathFromInstance)
-        }
-        else
-        {
-            Write-Verbose 'Collecting data from remote computer'
-            $serviceInstance = [wmi] (Get-CimInstance -ClassName SoftwareLicensingService -ComputerName $Computer | getCimPathFromInstance)
-        }
-
-        $isRearmable = canRearm
-        Write-Verbose "Is rearmable: $isRearmable"
-
-        if ($isRearmable -eq $false)
-        {
-            Write-Verbose 'No need to rearm.'
-            continue
-        }
-
-        if ($product.LicenseStatus -eq [LicenseStatusCode]::Unknown)
-        {
-            Write-Error 'License status cannot be collected. It is suggested to restart computer.'
-            continue
-        }
-
-        try
-        {
-            [void]$serviceInstance.ReArmWindows()
-            [void]$serviceInstance.RefreshLicenseStatus()
-            Write-Verbose 'Command completed successfully.'
-            Write-Verbose 'Please restart the system for the changes to take effect.'
-        }
-        catch [System.Management.Automation.MethodInvocationException]
-        {
-            Write-Error 'Rearm failed.'
-        }
-    }
-}
-
-function manageCache
-{
-    param(
-        [string]$Computer,
-        [bool]$Enabled
-    )
-    if ($Computer -eq 'localhost')
-    {
-        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService'
-    }
-    else
-    {
-        $service = Get-CimInstance -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer
-    }
-
-    if ($Enabled)
-    {
-        $service.DisableKeyManagementServiceHostCaching(0) > $null # Disable caching
-    }
-    else
-    {
-        $service.DisableKeyManagementServiceHostCaching(1) > $null # Disable caching
-    }
-
-}
-#endregion
+#endregion Private functions
