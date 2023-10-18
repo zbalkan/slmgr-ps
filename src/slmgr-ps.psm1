@@ -162,6 +162,8 @@ Get-WindowsActivation # Collects basic license information of local computer, eq
 .EXAMPLE
 Get-WindowsActivation -Extended # Collects extended license information of local computer, equal to slmgr.vbs /dlv
 .EXAMPLE
+Get-WindowsActivation -Expiry # Collects license expiration information of local computer, equal to slmgr.vbs /xpr
+.EXAMPLE
 Get-WindowsActivation -Computer WS01 # Collects basic license information of computer WS01 over WinRM
 .LINK
 https://github.com/zbalkan/slmgr-ps

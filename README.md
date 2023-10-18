@@ -38,13 +38,16 @@ Start-WindowsActivation -ReArm
 # Collects basic license information of local computer, equal to slmgr.vbs /dli
 Get-WindowsActivation
 
-# Collects extended license informationof local computer, equal to slmgr.vbs /dlv
+# Collects extended license information of local computer, equal to slmgr.vbs /dlv
 Get-WindowsActivation -Extended
+
+# Collects license expiration information of local computer, equal to slmgr.vbs /xpr
+Get-WindowsActivation -Expiry
 
 # Collects basic license information of computer WS01 over WinRM
 Get-WindowsActivation -Computer WS01
-
 ```
+
 ## About this module
 
 One of my hardening guideline is getting rid of vbscript in every environment.
