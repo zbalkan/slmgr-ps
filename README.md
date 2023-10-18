@@ -75,8 +75,9 @@ I converted this simple, one-cmdlet script to a module and published it so anyon
 | slmgr /rearm                          | Start-WindowsActivation -Rearm                                                  | |
 | slmgr /dli                            | Get-WindowsActivation                                                           | |
 | slmgr /dlv                            | Get-WindowsActivation -Extended                                                 | |
+| slmgr /xpr                            | Get-WindowsActivation -Expiry                                                   | |
 | slmgr /ckhc                           | Start-WindowsActivation -CacheEnabled $false                                    | |
-| slmgr /skhc                           | Start-WindowsActivation -CacheEnabled $true                                     | KMS cache is enabled by default   |
+| slmgr /skhc                           | Start-WindowsActivation -CacheEnabled $true                                     | KMS cache is enabled by default |
 | slmgr /skms activationservername:port | Start-WindowsActivation -KMSServerFQDN activationservername -KMSServerPort port | |
 | slmgr /ad                             | not implemented                                                                 | |
 | slmgr /ad                             | not implemented                                                                 | |
@@ -100,7 +101,6 @@ I converted this simple, one-cmdlet script to a module and published it so anyon
 | slmgr /sdns                           | not implemented                                                                 | |
 | slmgr /cdns                           | not implemented                                                                 | |
 | slmgr /upk                            | not implemented                                                                 | |
-| slmgr /xpr                            | not implemented                                                                 | |
 | slmgr /lil                            | not implemented                                                                 | |
 | slmgr /ril                            | not implemented                                                                 | |
 | slmgr /stao                           | not implemented                                                                 | |
