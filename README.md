@@ -38,13 +38,16 @@ Start-WindowsActivation -ReArm
 # Collects basic license information of local computer, equal to slmgr.vbs /dli
 Get-WindowsActivation
 
-# Collects extended license informationof local computer, equal to slmgr.vbs /dlv
+# Collects extended license information of local computer, equal to slmgr.vbs /dlv
 Get-WindowsActivation -Extended
+
+# Collects license expiration information of local computer, equal to slmgr.vbs /xpr
+Get-WindowsActivation -Expiry
 
 # Collects basic license information of computer WS01 over WinRM
 Get-WindowsActivation -Computer WS01
-
 ```
+
 ## About this module
 
 One of my hardening guideline is getting rid of vbscript in every environment.
@@ -72,8 +75,9 @@ I converted this simple, one-cmdlet script to a module and published it so anyon
 | slmgr /rearm                          | Start-WindowsActivation -Rearm                                                  | |
 | slmgr /dli                            | Get-WindowsActivation                                                           | |
 | slmgr /dlv                            | Get-WindowsActivation -Extended                                                 | |
+| slmgr /xpr                            | Get-WindowsActivation -Expiry                                                   | |
 | slmgr /ckhc                           | Start-WindowsActivation -CacheEnabled $false                                    | |
-| slmgr /skhc                           | Start-WindowsActivation -CacheEnabled $true                                     | KMS cache is enabled by default   |
+| slmgr /skhc                           | Start-WindowsActivation -CacheEnabled $true                                     | KMS cache is enabled by default |
 | slmgr /skms activationservername:port | Start-WindowsActivation -KMSServerFQDN activationservername -KMSServerPort port | |
 | slmgr /ad                             | not implemented                                                                 | |
 | slmgr /ad                             | not implemented                                                                 | |
@@ -97,7 +101,6 @@ I converted this simple, one-cmdlet script to a module and published it so anyon
 | slmgr /sdns                           | not implemented                                                                 | |
 | slmgr /cdns                           | not implemented                                                                 | |
 | slmgr /upk                            | not implemented                                                                 | |
-| slmgr /xpr                            | not implemented                                                                 | |
 | slmgr /lil                            | not implemented                                                                 | |
 | slmgr /ril                            | not implemented                                                                 | |
 | slmgr /stao                           | not implemented                                                                 | |
