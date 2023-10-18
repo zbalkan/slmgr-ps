@@ -180,8 +180,12 @@ function global:Get-WindowsActivation
         [string[]]
         $Computers = @('localhost'),
 
-        [Parameter(Mandatory = $false)]
-        [switch]$Extended
+        [Parameter(Mandatory = $false, ParameterSetName = 'Extended')]
+        [switch]$Extended,
+
+        [Parameter(Mandatory = $false, ParameterSetName = 'Expiry')]
+        [switch]$Expiry
+
     )
     Begin
     {
@@ -200,6 +204,10 @@ function global:Get-WindowsActivation
                 if ($Extended.IsPresent)
                 {
                     return getExtendedLicenseInformation -Computer $Computer
+                }
+                elseif ($Expiry.IsPresent)
+                {
+                    return getExpiryInformation -Computer $Computer
                 }
                 else
                 {
@@ -503,6 +511,73 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
         RemainingWindowsRearmCount = $remainingAppRearm
         RemainingSkuRearmCount     = $remainingSkuRearm
         TrustedTime                = $trustedTime
+    }
+    return $result
+}
+
+function getExpiryInformation
+{
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [string]
+        $Computer
+    )
+
+    $expiryQuery = 'SELECT ID, ApplicationId, PartialProductKey, LicenseIsAddon, Description, Name, LicenseStatus, GracePeriodRemaining FROM SoftwareLicensingProduct
+WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+
+    if ($Computer -eq 'localhost')
+    {
+        $product = Get-CimInstance -Query $expiryQuery
+    }
+    else
+    {
+        $product = Get-CimInstance -Query $expiryQuery -ComputerName $Computer
+    }
+    $name = $product.Name
+    $status = [LicenseStatusCode]($product.LicenseStatus)
+    $graceRemaining = $product.GracePeriodRemaining
+    $endDate = (Get-Date).AddMinutes($graceRemaining)
+
+    $expirationInfo = switch ($product.LicenseStatus)
+    {
+        0 { [LicenseStatusCode]::Unlicensed.ToString() }
+        1
+        {
+            if ($graceRemaining -eq 0)
+            {
+                'The machine is permanently activated.'
+            }
+            else
+            {
+                if ($product.Description -icontains 'TIMEBASED_')
+                {
+                    "Timebased activation will expire $endDate"
+                }
+                elif($product.Description -icontains 'VIRTUAL_MACHINE_ACTIVATION') {
+                    "Automatic VM activation will expire $endDate"
+                }
+                else {
+                    "Volume activation will expire $endDate"
+                }
+            }
+        }
+        2 { "Initial grace period ends $endDate" }
+        3 { "Additional grace period ends $endDate" }
+        4 { "Non-genuine grace period ends $endDate" }
+        5 { 'Windows is in Notification mode' }
+        6 { "Extended grace period ends $endDate" }
+        Default
+        {
+            Write-Error -Message 'Unexpected license status'
+        }
+    }
+
+    $result = [PSCustomObject]@{
+        Name                  = $name
+        LicenseStatus         = $status
+        ExpirationInformation = $expirationInfo
     }
     return $result
 }
