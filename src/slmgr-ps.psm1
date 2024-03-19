@@ -655,7 +655,7 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     $remainingAppRearm = $product.RemainingAppReArmCount
     $remainingSkuRearm = $product.RemainingSkuReArmCount
     $trustedTime = ''
-    if ($null -ne $product.Trustedtime)
+    if ([string]::IsNullOrEmpty($product.Trustedtime) -eq $false)
     {
         $trustedTime = [datetime]::Parse($product.Trustedtime)
     }
