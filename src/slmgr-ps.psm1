@@ -654,7 +654,11 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     $status = [LicenseStatusCode]( $product.LicenseStatus)
     $remainingAppRearm = $product.RemainingAppReArmCount
     $remainingSkuRearm = $product.RemainingSkuReArmCount
-    $trustedTime = [datetime]::Parse($product.Trustedtime)
+    $trustedTime = ''
+    if ([string]::IsNullOrEmpty($product.Trustedtime) -eq $false)
+    {
+        $trustedTime = [datetime]::Parse($product.Trustedtime)
+    }
 
     $result = [PSCustomObject]@{
         Name                       = $name
