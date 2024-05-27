@@ -92,9 +92,8 @@ I converted this simple, one-cmdlet script to a module and published it so anyon
 | slmgr /del                            | not implemented                                                                 | |
 | slmgr /atp                            | not implemented                                                                 | |
 | slmgr /skms-domain                    | not implemented                                                                 | |
-| slmgr /ckms                           | not implemented                                                                 | |
-| slmgr /ckms                           | not implemented                                                                 | |
-| slmgr /cpky                           | not implemented                                                                 | |
+| slmgr /ckms                           | https://github.com/zbalkan/slmgr-ps/issues/8#issue-1947051438                   | |
+| slmgr /cpky                           | https://github.com/zbalkan/slmgr-ps/issues/8#issue-1947051438                   | |
 | slmgr /dti                            | not implemented                                                                 | |
 | slmgr /ilc                            | not implemented                                                                 | |
 | slmgr /rilc                           | not implemented                                                                 | |
@@ -107,7 +106,7 @@ I converted this simple, one-cmdlet script to a module and published it so anyon
 | slmgr /sprt                           | not implemented                                                                 | |
 | slmgr /sdns                           | not implemented                                                                 | |
 | slmgr /cdns                           | not implemented                                                                 | |
-| slmgr /upk                            | not implemented                                                                 | |
+| slmgr /upk                            | https://github.com/zbalkan/slmgr-ps/issues/8#issue-1947051438                   | |
 | slmgr /lil                            | not implemented                                                                 | |
 | slmgr /ril                            | not implemented                                                                 | |
 | slmgr /stao                           | not implemented                                                                 | |
