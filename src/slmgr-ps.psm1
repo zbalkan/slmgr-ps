@@ -319,7 +319,7 @@ function activate
     # Check Windows Activation Status
     $product = getLicenseStatus -Computer $Computer -Session $Session
     Write-Verbose "License Status: $($product.Status)"
-    if ($product.Activated) { Write-Warning 'The product is already activated.'; continue; }
+    if ($product.Activated) { Write-Warning 'The product is already activated.'; return; }
 
     # Get product key
     $productKey = getProductKey -Computer $Computer -Session $Session
