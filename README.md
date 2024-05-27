@@ -13,6 +13,7 @@ Install-Module slmgr-ps
 ```
 
 ### `Start-WindowsActivation` cmdlet
+
 ```powershell
 Start-WindowsActivation -WhatIf
 
@@ -37,6 +38,7 @@ Start-WindowsActivation -ReArm
 ```
 
 ### `Get-WindowsActivation` cmdlet
+
 ```powershell
 # Collects basic license information of local computer, equal to slmgr.vbs /dli
 Get-WindowsActivation
@@ -58,6 +60,7 @@ Get-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
 ## About this module
 
 One of my hardening guideline is getting rid of vbscript in every environment.
+
 - I disabled `wscript` and `cscript` executables.
 ![alt text](images/blocked.png "Blocked cscript and wscript")
 
@@ -75,9 +78,9 @@ I converted this simple, one-cmdlet script to a module and published it so anyon
 | slmgr slmgr.vbs                       | slmgr-ps   | Notes |
 |---------------------------------------|------------|-------|
 | slmgr machinename                     | -Computers                                                                      | Instead of one, you can provide multiple computer names. |
-| slmgr username                        | -Credentials                                                                    | The command uses the current user's credentials. User can passs a credential object. Reference: CWE-214: Invocation of Process Using Visible Sensitive Information |
-| slmgr password                        | -Credentials                                                                    | The command uses the current user's credentials. User can passs a credential object. Reference: CWE-214: Invocation of Process Using Visible Sensitive Information |
-| slmgr /ipk zfgwx-zvc9b-646c9-t64zx    | Start-WindowsActivation                                                         | No need for KMS keys |
+| slmgr username                        | -Credentials                                                                    | The command uses the current user's credentials. User can pass a credential object. Reference: CWE-214: Invocation of Process Using Visible Sensitive Information |
+| slmgr password                        | -Credentials                                                                    | The command uses the current user's credentials. User can pass a credential object. Reference: CWE-214: Invocation of Process Using Visible Sensitive Information |
+| slmgr /ipk *zfgwx-zvc9b-646c9-t64zx*    | Start-WindowsActivation                                                         | No need for KMS keys |
 | slmgr /ato                            | Start-WindowsActivation                                                         | no need for calling /ato separately |
 | slmgr /rearm                          | Start-WindowsActivation -Rearm                                                  | |
 | slmgr /dli                            | Get-WindowsActivation                                                           | |
@@ -85,35 +88,35 @@ I converted this simple, one-cmdlet script to a module and published it so anyon
 | slmgr /xpr                            | Get-WindowsActivation -Expiry                                                   | |
 | slmgr /ckhc                           | Start-WindowsActivation -CacheEnabled $false                                    | |
 | slmgr /skhc                           | Start-WindowsActivation -CacheEnabled $true                                     | KMS cache is enabled by default |
-| slmgr /skms activationservername:port | Start-WindowsActivation -KMSServerFQDN activationservername -KMSServerPort port | |
-| slmgr /ad                             | not implemented                                                                 | |
-| slmgr /ad                             | not implemented                                                                 | |
-| slmgr /ao                             | not implemented                                                                 | |
-| slmgr /del                            | not implemented                                                                 | |
-| slmgr /atp                            | not implemented                                                                 | |
-| slmgr /skms-domain                    | not implemented                                                                 | |
+| slmgr /skms *activationservername:port* | Start-WindowsActivation -KMSServerFQDN activationservername -KMSServerPort port | |
+| slmgr /ad-activation-online *ProductKey [Activation Object Name]*         | not implemented                                                                 | |
+| slmgr /ad-activation-get-iid          | not implemented                                                                 | |
+| slmgr /ao-list                        | not implemented                                                                 | |
+| slmgr /del-ao *[Activation Object DN/RDN]* | not implemented                                                                 | |
+| slmgr /atp *Confirmation_ID*          | not implemented                                                                 | |
+| slmgr /skms-domain *FQDN [Activation ID]* | not implemented                                                                 | |
 | slmgr /ckms                           | not implemented                                                                 | |
-| slmgr /ckms                           | not implemented                                                                 | |
+| slmgr /ckms-domain *FQDN [Activation ID]* | not implemented                                                                 | |
 | slmgr /cpky                           | not implemented                                                                 | |
 | slmgr /dti                            | not implemented                                                                 | |
-| slmgr /ilc                            | not implemented                                                                 | |
+| slmgr /ilc *License_file*             | not implemented                                                                 | |
 | slmgr /rilc                           | not implemented                                                                 | |
 | slmgr /rearm-app                      | not implemented                                                                 | |
 | slmgr /rearm-sku                      | not implemented                                                                 | |
-| slmgr /sai                            | not implemented                                                                 | |
-| slmgr /sri                            | not implemented                                                                 | |
+| slmgr /sai *interval*                 | not implemented                                                                 | |
+| slmgr /sri *interval*                 | not implemented                                                                 | |
 | slmgr /spri                           | not implemented                                                                 | |
 | slmgr /cpri                           | not implemented                                                                 | |
-| slmgr /sprt                           | not implemented                                                                 | |
+| slmgr /sprt *port*                    | not implemented                                                                 | |
 | slmgr /sdns                           | not implemented                                                                 | |
 | slmgr /cdns                           | not implemented                                                                 | |
 | slmgr /upk                            | not implemented                                                                 | |
 | slmgr /lil                            | not implemented                                                                 | |
-| slmgr /ril                            | not implemented                                                                 | |
+| slmgr /ril *ILID ILvID*               | not implemented                                                                 | |
 | slmgr /stao                           | not implemented                                                                 | |
 | slmgr /ctao                           | not implemented                                                                 | |
 | slmgr /ltc                            | not implemented                                                                 | |
-| slmgr /fta                            | not implemented                                                                 | |
+| slmgr /fta *Certificate Thumbprint [PIN]* | not implemented                                                                 | |
 
 ### The design differences from `slmgr.vbs`
 
