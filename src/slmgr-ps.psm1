@@ -360,16 +360,15 @@ function activateWithDNS
         [string]$Computer,
         [string]$ProductKey,
         [AllowNull()]
-        [AllowNull()]
         [Microsoft.Management.Infrastructure.CimSession]$Session
     )
     if ($Computer -eq 'localhost')
     {
-        $service = Get-CimInstance -Verbose:$false -Query 'SELECT * FROM SoftwareLicensingService' -CimSession $Session
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
     }
     else
     {
-        $service = Get-CimInstance -Verbose:$false -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer -CimSession $Session
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
     }
 
     $service.InstallProductKey($ProductKey) > $null
@@ -389,11 +388,11 @@ function activateWithParams
     )
     if ($Computer -eq 'localhost')
     {
-        $service = Get-CimInstance -Verbose:$false -Query 'SELECT * FROM SoftwareLicensingService' -CimSession $Session
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
     }
     else
     {
-        $service = Get-CimInstance -Verbose:$false -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer -CimSession $Session
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
     }
 
     $service.SetKeyManagementServiceMachine($KeyServerName)
@@ -418,12 +417,12 @@ function rearm
     if ($Computer -like 'localhost')
     {
         Write-Verbose 'Collecting data from local computer'
-        $serviceInstance = [wmi] (Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | getCimPathFromInstance)
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
     }
     else
     {
         Write-Verbose 'Collecting data from remote computer'
-        $serviceInstance = [wmi] (Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | getCimPathFromInstance)
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
     }
 
     $isRearmable = canRearm -Computer $Computer -Session $Session
@@ -443,8 +442,8 @@ function rearm
 
     try
     {
-        [void]$serviceInstance.ReArmWindows()
-        [void]$serviceInstance.RefreshLicenseStatus()
+        [void]$service.ReArmWindows()
+        [void]$service.RefreshLicenseStatus()
         Write-Verbose 'Command completed successfully.'
         Write-Verbose 'Please restart the system for the changes to take effect.'
     }
@@ -485,11 +484,11 @@ function manageCache
     )
     if ($Computer -eq 'localhost')
     {
-        $service = Get-CimInstance -Verbose:$false -Query 'SELECT * FROM SoftwareLicensingService' -CimSession $Session
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
     }
     else
     {
-        $service = Get-CimInstance -Verbose:$false -Query 'SELECT * FROM SoftwareLicensingService' -ComputerName $Computer -CimSession $Session
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
     }
 
     if ($Enabled)
@@ -568,8 +567,10 @@ function getLicenseStatus
         [Microsoft.Management.Infrastructure.CimSession]$Session
     )
 
-    $query = 'SELECT LicenseStatus FROM SoftwareLicensingProduct
-WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+    $query = 'SELECT LicenseStatus
+    FROM SoftwareLicensingProduct
+    WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+
     if ($Computer -eq 'localhost')
     {
         $product = Get-CimInstance -Verbose:$false -Query $query -CimSession $Session
@@ -581,8 +582,8 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     $status = [LicenseStatusCode]( $product | Select-Object LicenseStatus).LicenseStatus
     $activated = $status -eq [LicenseStatusCode]::Licensed
     $result = [PSCustomObject]@{
-        LicenseStatus = $status
-        Activated     = $activated
+        'License Status' = $status
+        Activated        = $activated
     }
     return $result
 }
@@ -596,8 +597,9 @@ function getBasicLicenseInformation
         [Microsoft.Management.Infrastructure.CimSession]$Session
     )
 
-    $basicQuery = 'SELECT Name,Description,PartialProductKey,LicenseStatus FROM SoftwareLicensingProduct
-WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+    $basicQuery = 'SELECT Name,Description,PartialProductKey,LicenseStatus
+    FROM SoftwareLicensingProduct
+    WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
     if ($Computer -eq 'localhost')
     {
@@ -610,13 +612,13 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     $name = $product.Name
     $desc = $product.Description
     $partial = $product.PartialProductKey
-    $status = [LicenseStatusCode]( $product.LicenseStatus)
+    $status = [LicenseStatusCode]($product.LicenseStatus)
 
     $result = [PSCustomObject]@{
-        Name              = $name
-        Description       = $desc
-        PartialProductKey = $partial
-        LicenseStatus     = $status
+        Name                  = $name
+        Description           = $desc
+        'Partial Product Key' = $partial
+        'License Status'      = $status
     }
     return $result
 }
@@ -630,8 +632,9 @@ function getExtendedLicenseInformation
         [Microsoft.Management.Infrastructure.CimSession]$Session
     )
 
-    $extendedQuery = 'SELECT Name,Description,ID,ApplicationID,ProductKeyID,ProductKeyChannel,OfflineInstallationId,UseLicenseURL,ValidationURL,PartialProductKey,LicenseStatus,RemainingAppReArmCount,RemainingSkuReArmCount,TrustedTime FROM SoftwareLicensingProduct
-WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+    $extendedQuery = 'SELECT Name,Description,ID,ApplicationID,ProductKeyID,ProductKeyChannel,OfflineInstallationId,UseLicenseURL,ValidationURL,PartialProductKey,LicenseStatus,RemainingAppReArmCount,RemainingSkuReArmCount,TrustedTime
+    FROM SoftwareLicensingProduct
+    WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
     if ($Computer -eq 'localhost')
     {
@@ -661,20 +664,20 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     }
 
     $result = [PSCustomObject]@{
-        Name                       = $name
-        Description                = $desc
-        ActivationID               = $activationID
-        ApplicationID              = $applicationID
-        ProductKeyID               = $pkID
-        ProductKeyChannel          = $pkChannel
-        InstallationID             = $installationID
-        UseLicenseURL              = $licenseUrl
-        ValidationURL              = $validationUrl
-        PartialProductKey          = $partial
-        LicenseStatus              = $status
-        RemainingWindowsRearmCount = $remainingAppRearm
-        RemainingSkuRearmCount     = $remainingSkuRearm
-        TrustedTime                = $trustedTime
+        Name                            = $name
+        Description                     = $desc
+        'Activation ID'                 = $activationID
+        'Application ID'                = $applicationID
+        'Extended PID'                  = $pkID
+        'Product Key Channel'           = $pkChannel
+        'Installation ID'               = $installationID
+        'Use License URL'               = $licenseUrl
+        'Validation URL'                = $validationUrl
+        'Partial Product Key'           = $partial
+        'License Status'                = $status
+        'Remaining Windows Rearm Count' = $remainingAppRearm
+        'Remaining SKU Rearm Count'     = $remainingSkuRearm
+        'Trusted Time'                  = $trustedTime
     }
     return $result
 }
@@ -688,8 +691,9 @@ function getExpiryInformation
         [Microsoft.Management.Infrastructure.CimSession]$Session
     )
 
-    $expiryQuery = 'SELECT ID, ApplicationId, PartialProductKey, LicenseIsAddon, Description, Name, LicenseStatus, GracePeriodRemaining FROM SoftwareLicensingProduct
-WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+    $expiryQuery = 'SELECT ID, ApplicationId, PartialProductKey, LicenseIsAddon, Description, Name, LicenseStatus, GracePeriodRemaining
+    FROM SoftwareLicensingProduct
+    WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
     if ($Computer -eq 'localhost')
     {
@@ -739,9 +743,9 @@ WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
     }
 
     $result = [PSCustomObject]@{
-        Name                  = $name
-        LicenseStatus         = $status
-        ExpirationInformation = $expirationInfo
+        Name                     = $name
+        'License Status'         = $status
+        'Expiration Information' = $expirationInfo
     }
     return $result
 }
@@ -816,7 +820,7 @@ function getSession
 }
 
 # Reference: https://rohnspowershellblog.wordpress.com/2013/06/15/converting-a-ciminstance-to-a-managementobject-and-back/
-function getCimPathFromInstance
+function cimToWmi
 {
 
     [CmdletBinding()]
@@ -873,10 +877,10 @@ function getCimPathFromInstance
             $KeyValuePairsString = '=@'
         }
 
-        '\\{0}\{1}:{2}{3}' -f $InputObject.CimSystemProperties.ServerName,
+        return [wmi]('\\{0}\{1}:{2}{3}' -f $InputObject.CimSystemProperties.ServerName,
                                ($InputObject.CimSystemProperties.Namespace -replace '/', '\'),
-        $InputObject.CimSystemProperties.ClassName,
-        $KeyValuePairsString
+            $InputObject.CimSystemProperties.ClassName,
+            $KeyValuePairsString)
     }
 }
 #endregion Utility functions
