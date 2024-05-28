@@ -170,7 +170,7 @@ function global:Start-WindowsActivation
 
                 # Activation
                 Write-Verbose 'Initiating Activation operation'
-                # activate -Computer $Computer -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort -Session $session
+                activate -Computer $Computer -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort -Session $session
             }
         }
     }
