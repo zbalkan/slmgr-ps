@@ -1,10 +1,10 @@
 # slmgr-ps
 
-A drop in replacement for `slmgr.vbs` script.
+A drop in replacement for `slmgr.vbs` script. The script is in `alpha` state. You can make use of it as separate commands but it is suggested not to use it within automation scripts since the API is subject to change until v1.0.0.
 
 > Versions 0.2.2 to 0.2.4 has a logic error and unlisted from PowerShell Gallery. Please update to version >=0.2.5.
 
-**NB:** This is a partial implementation. The version 1.0.0 is planned to be the feature-complete version. Currently the features are limited to KMS scenarios. See [Comparison](#comparison) for details.
+**NB:** Beware that this is a partial implementation. The version 1.0.0 is planned to be the feature-complete version. Currently the features are limited to KMS and offline activation scenarios. See [Comparison](#comparison) for details.
 
 ## About this module
 
