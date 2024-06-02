@@ -182,7 +182,6 @@ function global:Start-WindowsActivation
                     {
                         exit 1
                     }
-
                 }
 
                 # Rearm can be run on trial versions only.
@@ -220,7 +219,7 @@ function global:Start-WindowsActivation
 
                 # Activation
                 Write-Verbose 'Initiating Activation operation'
-                activate -Computer $Computer -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort -Session $session
+                activateWithKMs -Computer $Computer -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort -Session $session
             }
         }
     }
@@ -364,7 +363,7 @@ enum LicenseStatusCode
 
 #region Activation functions
 
-function activate
+function activateWithKMs
 {
     [CmdletBinding()]
     param(
