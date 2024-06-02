@@ -28,6 +28,8 @@ Start-WindowsActivation -Computer WS01, WS02 -CacheEnabled $false # Disabled the
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500 # Activates the computer named WS01 against server.domain.net:2500
 .EXAMPLE
 Start-WindowsActivation -ReArm # ReArm the trial period. ReArming already licensed devices can break current license issues. Guard clauses wil protect 99% but cannot guarantee 100%.
+.EXAMPLE
+Start-WindowsActivation -Offline -ConfirmationID <confirmation ID> # Used for offline -aka phone- activation
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
@@ -49,6 +51,7 @@ function global:Start-WindowsActivation
         [Parameter(ParameterSetName = 'SpecifyKMSServer')]
         [Parameter(ParameterSetName = 'Rearm')]
         [Parameter(ParameterSetName = 'Cache')]
+        [Parameter(ParameterSetName = 'Offline')]
         [AllowNull()]
         [string[]]
         $Computers = @('localhost'),
@@ -62,6 +65,7 @@ function global:Start-WindowsActivation
         [Parameter(ParameterSetName = 'SpecifyKMSServer')]
         [Parameter(ParameterSetName = 'Rearm')]
         [Parameter(ParameterSetName = 'Cache')]
+        [Parameter(ParameterSetName = 'Offline')]
         [AllowNull()]
         [PSCredential]
         $Credentials = $null,
@@ -113,7 +117,37 @@ function global:Start-WindowsActivation
             ValueFromRemainingArguments = $false,
             ParameterSetName = 'Cache')]
         [bool]
-        $CacheEnabled
+        $CacheEnabled,
+
+        [Parameter(Mandatory = $false,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'Offline')]
+        [switch]$Offline,
+
+        [Parameter(Mandatory = $true,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'Offline')]
+        [ValidateLength(64, 64)]
+        [ValidateScript(
+            {
+                $pattern = [Regex]::new('^[0-9]{64}$')
+                if ($pattern.Matches($_).Count -gt 0)
+                {
+                    $true
+                }
+                else
+                {
+                    throw "$_ is invalid. Please provide a valid Confirmation Id"
+                }
+            })]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $ConfirmationId
+
     )
     Begin
     {
@@ -135,6 +169,21 @@ function global:Start-WindowsActivation
             foreach ($Computer in $Computers)
             {
                 Write-Verbose "Computer name: $Computer"
+
+                if ($PSCmdlet.ParameterSetName -eq 'Offline')
+                {
+                    try
+                    {
+                        Write-Verbose 'Initiating offline activation operation'
+                        activateOffline -ConfirmationId $ConfirmationId -Computer $Computer -Session $session
+                        exit 0
+                    }
+                    catch
+                    {
+                        exit 1
+                    }
+                }
+
                 # Rearm can be run on trial versions only.
                 # Try rearm and exit early.
                 if ($PSCmdlet.ParameterSetName -eq 'Rearm')
@@ -170,7 +219,7 @@ function global:Start-WindowsActivation
 
                 # Activation
                 Write-Verbose 'Initiating Activation operation'
-                activate -Computer $Computer -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort -Session $session
+                activateWithKMs -Computer $Computer -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort -Session $session
             }
         }
     }
@@ -181,7 +230,6 @@ function global:Start-WindowsActivation
         {
             Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
         }
-
     }
 }
 
@@ -205,6 +253,8 @@ Get-WindowsActivation -Expiry # Collects license expiration information of local
 Get-WindowsActivation -Computer WS01 # Collects basic license information of computer WS01 over WinRM
 .EXAMPLE
 Get-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Collects basic license information of computer WS01 over WinRM using different credentials
+.EXAMPLE
+Get-WindowsActivation -Offline # Get the offline installation ID for offline -aka phone- activation
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
@@ -223,6 +273,7 @@ function global:Get-WindowsActivation
         [Parameter(ParameterSetName = 'Basic')]
         [Parameter(ParameterSetName = 'Extended')]
         [Parameter(ParameterSetName = 'Expiry')]
+        [Parameter(ParameterSetName = 'Offline')]
         [AllowNull()]
         [string[]]
         $Computers = @('localhost'),
@@ -235,6 +286,7 @@ function global:Get-WindowsActivation
         [Parameter(ParameterSetName = 'Basic')]
         [Parameter(ParameterSetName = 'Extended')]
         [Parameter(ParameterSetName = 'Expiry')]
+        [Parameter(ParameterSetName = 'Offline')]
         [AllowNull()]
         [PSCredential]
         $Credentials = $null,
@@ -243,8 +295,10 @@ function global:Get-WindowsActivation
         [switch]$Extended,
 
         [Parameter(Mandatory = $false, ParameterSetName = 'Expiry')]
-        [switch]$Expiry
+        [switch]$Expiry,
 
+        [Parameter(ParameterSetName = 'Offline')]
+        [switch]$Offline
     )
     Begin
     {
@@ -266,9 +320,13 @@ function global:Get-WindowsActivation
                 {
                     return getExtendedLicenseInformation -Computer $Computer -Session $session
                 }
-                elseif ($Expiry.IsPresent)
+                if ($Expiry.IsPresent)
                 {
                     return getExpiryInformation -Computer $Computer -Session $session
+                }
+                if ($Offline.IsPresent)
+                {
+                    return getInstallationId -Computer $Computer -Session $session
                 }
                 else
                 {
@@ -305,7 +363,7 @@ enum LicenseStatusCode
 
 #region Activation functions
 
-function activate
+function activateWithKMs
 {
     [CmdletBinding()]
     param(
@@ -328,7 +386,7 @@ function activate
     # Activate Windows
     if ($productKey -eq 'Unknown')
     {
-        Write-Error 'Unknown OS.'
+        throw 'Unknown OS.'
     }
     else
     {
@@ -348,7 +406,7 @@ function activate
         }
         else
         {
-            Write-Error "Activation failed. Current status: $($product.LicenseStatus)"
+            throw "Activation failed. Current status: $($product.LicenseStatus)"
         }
     }
 }
@@ -371,9 +429,9 @@ function activateWithDNS
         $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
     }
 
-    $service.InstallProductKey($ProductKey) > $null
+    [void]$service.InstallProductKey($ProductKey)
     Start-Sleep -Seconds 10 # Installing product key takes time.
-    $service.RefreshLicenseStatus() > $null
+    [void]$service.RefreshLicenseStatus()
     Start-Sleep -Seconds 2 # It also takes time.
 }
 
@@ -398,12 +456,54 @@ function activateWithParams
     $service.SetKeyManagementServiceMachine($KeyServerName)
     $service.SetKeyManagementServicePort($KeyServerPort)
 
-    $service.InstallProductKey($ProductKey) > $null
+    [void]$service.InstallProductKey($ProductKey)
     Start-Sleep -Seconds 10 # Installing product key takes time.
-    $service.RefreshLicenseStatus() > $null
+    [void]$service.RefreshLicenseStatus()
     Start-Sleep -Seconds 2 # It also takes time.
 }
 
+function activateOffline
+{
+    [CmdletBinding()]
+    [CmdletBinding()]
+    param (
+        [string]
+        $ConfirmationId,
+        [string]$Computer,
+        [AllowNull()]
+        [Microsoft.Management.Infrastructure.CimSession]$Session
+    )
+
+    $query = "SELECT Version
+    FROM SoftwareLicensingProduct
+    WHERE PartialProductKey <> null AND Name LIKE 'Win%'"
+
+    if ($Computer -like 'localhost')
+    {
+        Write-Verbose 'Connecting to local computer...'
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
+        $product = Get-CimInstance -Verbose:$false -Query $query -CimSession $Session | cimToWmi
+    }
+    else
+    {
+        Write-Verbose 'Connecting to remote computer...'
+        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
+        $product = Get-CimInstance -Verbose:$false -Query $query -ComputerName $Computer -CimSession $Session | cimToWmi
+    }
+
+    $InstallationId = getInstallationId -Computer $Computer -CimSession $Session
+    Write-Verbose 'Submitting activation and confirmation IDs...'
+    Write-Debug 'Offline Installation ID: $InstallationId'
+    Write-Debug 'Confirmation ID: $ConfirmationId'
+
+    if ([int]$product.DepositOfflineConfirmationId($InstallationId, $ConfirmationId) -ne 0)
+    {
+        throw 'Failed to activate with offline activation. Check the Confirmation ID.'
+    }
+    Write-Verbose 'Updating the license status...'
+    [void]$service.RefreshLicenseStatus()
+    [void]$product.refresh_ # Not sure if it is an undocumented internal command. I have found this gem in slgr.vbs
+}
 
 function rearm
 {
@@ -416,12 +516,12 @@ function rearm
 
     if ($Computer -like 'localhost')
     {
-        Write-Verbose 'Collecting data from local computer'
+        Write-Verbose 'Connecting to local computer'
         $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
     }
     else
     {
-        Write-Verbose 'Collecting data from remote computer'
+        Write-Verbose 'Connecting to remote computer'
         $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
     }
 
@@ -436,20 +536,22 @@ function rearm
 
     if ($product.LicenseStatus -eq [LicenseStatusCode]::Unknown)
     {
-        Write-Error 'License status cannot be collected. It is suggested to restart computer.'
-        continue
+        throw 'License status cannot be collected. It is suggested to restart computer.'
     }
 
     try
     {
-        [void]$service.ReArmWindows()
+        if ($service.ReArmWindows() -ne 0)
+        {
+            throw 'Failed to rearm Windows.'
+        }
         [void]$service.RefreshLicenseStatus()
         Write-Verbose 'Command completed successfully.'
         Write-Verbose 'Please restart the system for the changes to take effect.'
     }
     catch [System.Management.Automation.MethodInvocationException]
     {
-        Write-Error 'Rearm failed.'
+        throw 'Rearm failed.'
     }
 }
 
@@ -597,17 +699,17 @@ function getBasicLicenseInformation
         [Microsoft.Management.Infrastructure.CimSession]$Session
     )
 
-    $basicQuery = 'SELECT Name,Description,PartialProductKey,LicenseStatus
+    $query = 'SELECT Name,Description,PartialProductKey,LicenseStatus
     FROM SoftwareLicensingProduct
     WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
     if ($Computer -eq 'localhost')
     {
-        $product = Get-CimInstance -Verbose:$false -Query $basicQuery -CimSession $Session
+        $product = Get-CimInstance -Verbose:$false -Query $query -CimSession $Session
     }
     else
     {
-        $product = Get-CimInstance -Verbose:$false -Query $basicQuery -ComputerName $Computer -CimSession $Session
+        $product = Get-CimInstance -Verbose:$false -Query $query -ComputerName $Computer -CimSession $Session
     }
     $name = $product.Name
     $desc = $product.Description
@@ -738,7 +840,7 @@ function getExpiryInformation
         6 { "Extended grace period ends $endDate" }
         Default
         {
-            Write-Error -Message 'Unexpected license status'
+            throw 'Unexpected license status'
         }
     }
 
@@ -750,8 +852,33 @@ function getExpiryInformation
     return $result
 }
 
+function getInstallationId
+{
+    [CmdletBinding()]
+    param (
+        [string]$Computer,
+        [AllowNull()]
+        [Microsoft.Management.Infrastructure.CimSession]$Session
+    )
 
+    $query = 'SELECT OfflineInstallationId, PartialProductKey
+    FROM SoftwareLicensingProduct
+    WHERE PartialProductKey <> null AND Name LIKE "Windows%"'
 
+    if ($Computer -eq 'localhost')
+    {
+        $product = Get-CimInstance -Verbose:$false -Query $query -CimSession $Session
+    }
+    else
+    {
+        $product = Get-CimInstance -Verbose:$false -Query $query -ComputerName $Computer -CimSession $Session
+    }
+
+    $result = [PSCustomObject]@{
+        'Offline Installation Id' = $product.OfflineInstallationId
+    }
+    return $result
+}
 
 #endregion Information functions
 
