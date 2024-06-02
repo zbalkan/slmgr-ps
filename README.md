@@ -1,10 +1,10 @@
 # slmgr-ps
 
-A drop in replacement for `slmgr.vbs` script.
+A drop in replacement for `slmgr.vbs` script. The script is in `alpha` state. You can make use of it as separate commands but it is suggested not to use it within automation scripts since the API is subject to change until v1.0.0.
 
 > Versions 0.2.2 to 0.2.4 has a logic error and unlisted from PowerShell Gallery. Please update to version >=0.2.5.
 
-**NB:** This is a partial implementation. The version 1.0.0 is planned to be the feature-complete version. Currently the features are limited to KMS scenarios. See [Comparison](#comparison) for details.
+**NB:** Beware that this is a partial implementation. The version 1.0.0 is planned to be the feature-complete version. Currently the features are limited to KMS and offline activation scenarios. See [Comparison](#comparison) for details.
 
 ## About this module
 
@@ -59,8 +59,8 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 |\/rearm-app *Application ID* |Resets the licensing status of the specified app. | not implemented | |
 |\/rearm-sku *Application ID* |Resets the licensing status of the specified SKU. | not implemented | |
 |\/upk [*Application ID*] |This option uninstalls the product key of the current Windows edition. After a restart, the system will be in an Unlicensed state unless a new product key is installed.<br/>Optionally, you can use the ***Activation ID*** parameter to specify a different installed product.<br/>This operation must be run from an elevated Command Prompt window. | not implemented | |
-|\/dti [*Activation ID*] |Displays installation ID for offline activation. | not implemented | |
-|\/atp *Confirmation ID* |Activate product by using user-provided confirmation ID. | not implemented | |
+|\/dti [*Activation ID*] |Displays installation ID for offline activation. | Get-WindowsActivation -Offline | |
+|\/atp *Confirmation ID* |Activate product by using user-provided confirmation ID. | Start-WindowsActivation -Offline -ConfirmationID <confirmation ID> | |
 
 #### KMS client options
 
