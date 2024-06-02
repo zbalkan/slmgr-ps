@@ -59,8 +59,8 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 |\/rearm-app *Application ID* |Resets the licensing status of the specified app. | not implemented | |
 |\/rearm-sku *Application ID* |Resets the licensing status of the specified SKU. | not implemented | |
 |\/upk [*Application ID*] |This option uninstalls the product key of the current Windows edition. After a restart, the system will be in an Unlicensed state unless a new product key is installed.<br/>Optionally, you can use the ***Activation ID*** parameter to specify a different installed product.<br/>This operation must be run from an elevated Command Prompt window. | not implemented | |
-|\/dti [*Activation ID*] |Displays installation ID for offline activation. | not implemented | |
-|\/atp *Confirmation ID* |Activate product by using user-provided confirmation ID. | not implemented | |
+|\/dti [*Activation ID*] |Displays installation ID for offline activation. | Get-WindowsActivation -Offline | |
+|\/atp *Confirmation ID* |Activate product by using user-provided confirmation ID. | Start-WindowsActivation -Offline -ConfirmationID <confirmation ID> | |
 
 #### KMS client options
 
