@@ -1,15 +1,16 @@
-function queryExpiryInformation
+function Get-ExpiryInformation
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param (
         [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $query = 'SELECT ID, ApplicationId, PartialProductKey, LicenseIsAddon, Description, Name, LicenseStatus, GracePeriodRemaining
+    $query = 'SELECT ID, Description, Name, LicenseStatus, GracePeriodRemaining
     FROM SoftwareLicensingProduct
     WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
-    $product = getWMIObject -CimSession $CimSession -Query $query
+    $product = Get-CustomWMIObject -CimSession $CimSession -Query $query
 
     $name = $product.Name
     $status = [LicenseStatusCode]($product.LicenseStatus)

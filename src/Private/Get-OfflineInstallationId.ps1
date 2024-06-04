@@ -1,15 +1,16 @@
-function queryOfflineInstallationId
+function Get-OfflineInstallationId
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param (
         [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $query = 'SELECT ID, OfflineInstallationId, PartialProductKey
+    $query = 'SELECT ID, Name, OfflineInstallationId, PartialProductKey
     FROM SoftwareLicensingProduct
     WHERE (PartialProductKey <> null AND Name LIKE "Windows%")'
 
-    $product = getWMIObject -CimSession $CimSession -Query $query
+    $product = Get-CustomWMIObject -CimSession $CimSession -Query $query
 
     $result = [PSCustomObject]@{
         'Offline Installation Id' = $product.OfflineInstallationId

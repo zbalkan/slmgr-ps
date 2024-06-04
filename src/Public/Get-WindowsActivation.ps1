@@ -26,6 +26,7 @@ https://github.com/zbalkan/slmgr-ps
 #>
 function Get-WindowsActivation
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $true,
         ConfirmImpact = 'None',
@@ -80,36 +81,37 @@ function Get-WindowsActivation
             foreach ($c in $Computer)
             {
                 Write-Verbose "Creating new CimSession for computer $c"
-                $session = getSession -Computer $c -Credentials $Credentials
+                $session = Get-Session -Computer $c -Credentials $Credentials
 
                 switch ($PSCmdlet.ParameterSetName)
                 {
                     'Extended'
                     {
-                        return queryExtendedLicenseInformation -CimSession $session
+                        $result = Get-ExtendedLicenseInformation -CimSession $session
                     }
                     'Expiry'
                     {
-                        return queryExpiryInformation -CimSession $session
+                        $result = Get-ExpiryInformation -CimSession $session
                     }
                     'Offline'
                     {
-                        return queryOfflineInstallationId -CimSession $session
+                        $result = Get-OfflineInstallationId -CimSession $session
                     }
                     default
                     {
-                        return queryBasicLicenseInformation -CimSession $session
+                        $result = Get-BasicLicenseInformation -CimSession $session
                     }
                 }
+                if ($null -ne $session)
+                {
+                    Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
+                }
+                return $result
             }
         }
         End
         {
             $ErrorActionPreference = $PreviousPreference
-            if ($null -ne $session)
-            {
-                Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
-            }
         }
     }
 }

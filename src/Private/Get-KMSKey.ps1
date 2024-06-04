@@ -1,7 +1,8 @@
 # KMS Client License Keys - https://docs.microsoft.com/en-us/windows-server/get-started/kmsclientkeys
 # Update as needed
-function getProductKeyForKMS
+function Get-KMSKey
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param(
         [Microsoft.Management.Infrastructure.CimSession]$CimSession

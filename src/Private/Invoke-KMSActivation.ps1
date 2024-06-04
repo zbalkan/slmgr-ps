@@ -1,4 +1,4 @@
-function activateWithKMS
+function Invoke-KMSActivation
 {
     [CmdletBinding()]
     param(
@@ -9,12 +9,12 @@ function activateWithKMS
     )
 
     # Check Windows Activation Status
-    $status = (queryLicenseStatus -CimSession $CimSession).LicenseStatus
+    $status = (Get-LicenseStatus -CimSession $CimSession).LicenseStatus
     Write-Verbose "License Status: $($status)"
     if ($status.Activated) { Write-Warning 'The product is already activated.'; return; }
 
     # Get product key
-    $productKey = getProductKeyForKMS -CimSession $CimSession
+    $productKey = Get-KMSKey -CimSession $CimSession
     Write-Verbose "Product Key (for KMS): $productKey"
 
     # Activate Windows
@@ -41,7 +41,7 @@ function activateWithKMS
 
 
         # Check Windows Activation Status
-        $license = queryLicenseStatus -CimSession $CimSession
+        $license = Get-LicenseStatus -CimSession $CimSession
 
         if ($license.Activated)
         {

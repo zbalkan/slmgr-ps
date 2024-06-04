@@ -1,4 +1,4 @@
-function activateOffline
+function Invoke-OfflineActivation
 {
     [CmdletBinding()]
     param (
@@ -8,7 +8,7 @@ function activateOffline
     )
 
     # Check Windows Activation Status
-    $status = (queryLicenseStatus -CimSession $CimSession).LicenseStatus
+    $status = (Get-LicenseStatus -CimSession $CimSession).LicenseStatus
     Write-Verbose "License Status: $($status)"
     if ($status.Activated) { Write-Warning 'The product is already activated.'; return; }
 
@@ -17,9 +17,9 @@ function activateOffline
     WHERE PartialProductKey <> null AND Name LIKE 'Win%'"
 
     Write-Verbose 'Connecting to computer...'
-    $product = getWMIObject -CimSession $CimSession -Query $query
+    $product = Get-CustomWMIObject -CimSession $CimSession -Query $query
 
-    $InstallationId = (queryOfflineInstallationId -CimSession $CimSession).'Offline Installation Id'
+    $InstallationId = (Get-OfflineInstallationId -CimSession $CimSession).'Offline Installation Id'
     Write-Verbose 'Submitting activation and confirmation IDs...'
     Write-Debug 'Offline Installation ID: $InstallationId'
     Write-Debug 'Confirmation ID: $ConfirmationId'

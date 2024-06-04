@@ -1,4 +1,4 @@
-function getSession
+function Get-Session
 {
     [CmdletBinding()]
     [OutputType([CimSession])]

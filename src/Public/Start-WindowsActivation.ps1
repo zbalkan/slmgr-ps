@@ -151,10 +151,10 @@ function Start-WindowsActivation
             foreach ($c in $Computer)
             {
                 Write-Verbose "Creating new CimSession for computer $c"
-                $session = getSession -Computer $c -Credentials $Credentials
+                $session = Get-Session -Computer $c -Credentials $Credentials
 
                 Write-Verbose 'Connecting to SoftwareLicensingService..'
-                $service = getWMIObject -CimSession $session -ClassName SoftwareLicensingService
+                $service = Get-CustomWMIObject -CimSession $session -ClassName SoftwareLicensingService
 
                 try
                 {
@@ -163,14 +163,14 @@ function Start-WindowsActivation
                         'Offline'
                         {
                             Write-Verbose 'Initiating offline activation operation'
-                            activateOffline -CimSession $session -Service $service -$ConfirmationId
+                            Invoke-OfflineActivation -CimSession $session -Service $service -$ConfirmationId
                             exit 0
                         }
 
                         'Rearm'
                         {
                             Write-Verbose 'Initiating ReArm operation'
-                            rearm -CimSession $session -Service $service
+                            Invoke-Rearm -CimSession $session -Service $service
                             exit 0
                         }
 
@@ -183,7 +183,7 @@ function Start-WindowsActivation
                             }
 
                             Write-Verbose 'Initiating KMS activation operation'
-                            activateWithKMS $PSBoundParameters -CimSession $session -Service $service
+                            Invoke-KMSActivation $PSBoundParameters -CimSession $session -Service $service
                             exit 0
                         }
 
@@ -192,9 +192,17 @@ function Start-WindowsActivation
                             throw 'Unknown parameter combination' # We do not expect this to be triggered at all but it is here to prevent human errors
                         }
                     }
+                    if ($null -ne $session)
+                    {
+                        Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
+                    }
                 }
                 catch
                 {
+                    if ($null -ne $session)
+                    {
+                        Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
+                    }
                     exit 1
                 }
             }
@@ -203,9 +211,5 @@ function Start-WindowsActivation
     End
     {
         $ErrorActionPreference = $PreviousPreference
-        if ($null -ne $session)
-        {
-            Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
-        }
     }
 }

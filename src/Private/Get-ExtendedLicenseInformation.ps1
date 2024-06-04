@@ -1,5 +1,6 @@
-function queryExtendedLicenseInformation
+function Get-ExtendedLicenseInformation
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param (
         [Microsoft.Management.Infrastructure.CimSession]$CimSession
@@ -9,7 +10,7 @@ function queryExtendedLicenseInformation
     FROM SoftwareLicensingProduct
     WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
-    $product = getWMIObject -CimSession $CimSession -Query $query
+    $product = Get-CustomWMIObject -CimSession $CimSession -Query $query
 
     $name = $product.Name
     $desc = $product.Description

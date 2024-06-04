@@ -1,4 +1,4 @@
-function rearm
+function Invoke-Rearm
 {
     [CmdletBinding()]
     param(
@@ -6,7 +6,7 @@ function rearm
         [wmi]$Service
     )
 
-    $status = (queryLicenseStatus -CimSession $CimSession).LicenseStatus
+    $status = (Get-LicenseStatus -CimSession $CimSession).LicenseStatus
     if ($status -eq [LicenseStatusCode]::Unknown)
     {
         throw 'License status cannot be collected. It is suggested to restart computer.'

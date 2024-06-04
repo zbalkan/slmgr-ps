@@ -3,8 +3,9 @@
 # Get- WMIObject. Unfortunately, not all properties and methods are available on the CIM
 # instances. Therefore, we convert the CIM instances to WMI objects to be able to access those methods.
 # Reference: https://rohnspowershellblog.wordpress.com/2013/06/15/converting-a-ciminstance-to-a-managementobject-and-back/
-function getWMIObject
+function Get-CustomWMIObject
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param (
         [Microsoft.Management.Infrastructure.CimSession]$CimSession,
