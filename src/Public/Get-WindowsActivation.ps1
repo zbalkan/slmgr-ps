@@ -77,6 +77,7 @@ function Get-WindowsActivation
     {
         if ($pscmdlet.ShouldProcess($Computer -join ', ', 'Collect license information'))
         {
+            $results = [System.Collections.Generic.List[PSCustomObject]]::new()
             Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
             foreach ($c in $Computer)
             {
@@ -106,8 +107,10 @@ function Get-WindowsActivation
                 {
                     Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
                 }
-                return $result
+                $results.Add($result)
             }
+
+            return $results.ToArray()
         }
         End
         {
