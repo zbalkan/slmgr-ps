@@ -63,12 +63,6 @@ function getWMIObject
                     $Value = $Instance.$KeyName
                 }
 
-                'DateTime'
-                {
-                    # Conver to WMI datetime
-                    $Value = '"{0}"' -f [System.Management.ManagementDateTimeConverter]::ToDmtfDateTime($Instance.$KeyName)
-                }
-
                 'Reference'
                 {
                     throw "CimInstance contains a key with type 'Reference'. This isn't currenlty supported (but can be added later)"

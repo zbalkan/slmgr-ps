@@ -24,10 +24,10 @@ function queryExtendedLicenseInformation
     $status = [LicenseStatusCode]( $product.LicenseStatus)
     $remainingAppRearm = $product.RemainingAppReArmCount
     $remainingSkuRearm = $product.RemainingSkuReArmCount
-    $trustedTime = [string]::Empty
-    if ([string]::IsNullOrEmpty($product.Trustedtime) -eq $false)
+    $trustedTime = [datetime]::MinValue
+    if ([string]::IsNullOrEmpty($product.TrustedTime) -eq $false)
     {
-        $trustedTime = [datetime]::Parse($product.Trustedtime)
+        $trustedTime = [System.Management.ManagementDateTimeConverter]::ToDateTime($product.Trustedtime)
     }
 
     $result = [PSCustomObject]@{
