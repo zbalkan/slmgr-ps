@@ -1,12 +1,6 @@
 #Requires -RunAsAdministrator
 #Requires -Version 5
 
-# Implement your module commands in this script.
-
-
-# Export only the functions using PowerShell standard verb-noun naming.
-# Be sure to list each exported functions in the FunctionsToExport field of the module manifest file.
-# This improves performance of command discovery in PowerShell.
 Export-ModuleMember -Cmdlet *-*
 
 <#
@@ -23,7 +17,7 @@ Start-WindowsActivation -Verbose # Activates the local computer
 .EXAMPLE
 Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Activates the computer named WS01 using different credentials
 .EXAMPLE
-Start-WindowsActivation -Computer WS01, WS02 -CacheEnabled $false # Disabled the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
+Start-WindowsActivation -Computer WS01, WS02 -CacheDisabled $false # Disabled the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
 .EXAMPLE
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500 # Activates the computer named WS01 against server.domain.net:2500
 .EXAMPLE
@@ -33,12 +27,12 @@ Start-WindowsActivation -Offline -ConfirmationID <confirmation ID> # Used for of
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
-function global:Start-WindowsActivation
+function Start-WindowsActivation
 {
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $false,
         ConfirmImpact = 'High',
-        DefaultParameterSetName = 'Activate')]
+        DefaultParameterSetName = 'ActivateWithKMS')]
     Param
     (
         # Type localhost or . for local computer or do not use the parameter
@@ -47,35 +41,31 @@ function global:Start-WindowsActivation
             ValueFromPipeline = $true,
             ValueFromPipelineByPropertyName = $true,
             ValueFromRemainingArguments = $false)]
-        [Parameter(ParameterSetName = 'Activate')]
-        [Parameter(ParameterSetName = 'SpecifyKMSServer')]
+        [Parameter(ParameterSetName = 'ActivateWithKMS')]
         [Parameter(ParameterSetName = 'Rearm')]
-        [Parameter(ParameterSetName = 'Cache')]
         [Parameter(ParameterSetName = 'Offline')]
         [AllowNull()]
         [string[]]
-        $Computers = @('localhost'),
+        $Computer = @('localhost'),
 
         # Define credentials other than current user if needed
         [Parameter(Mandatory = $false,
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
             ValueFromRemainingArguments = $false)]
-        [Parameter(ParameterSetName = 'Activate')]
-        [Parameter(ParameterSetName = 'SpecifyKMSServer')]
+        [Parameter(ParameterSetName = 'ActivateWithKMS')]
         [Parameter(ParameterSetName = 'Rearm')]
-        [Parameter(ParameterSetName = 'Cache')]
         [Parameter(ParameterSetName = 'Offline')]
         [AllowNull()]
         [PSCredential]
-        $Credentials = $null,
+        $Credentials,
 
         [Parameter(Mandatory = $false,
             Position = 1,
             ValueFromPipeline = $true,
             ValueFromPipelineByPropertyName = $true,
             ValueFromRemainingArguments = $false,
-            ParameterSetName = 'SpecifyKMSServer')]
+            ParameterSetName = 'ActivateWithKMS')]
         [ValidateLength(6, 253)]
         [ValidateScript(
             {
@@ -98,7 +88,7 @@ function global:Start-WindowsActivation
             ValueFromPipeline = $true,
             ValueFromPipelineByPropertyName = $true,
             ValueFromRemainingArguments = $false,
-            ParameterSetName = 'SpecifyKMSServer')]
+            ParameterSetName = 'ActivateWithKMS')]
         [ValidateRange(1, 65535)]
         [int]
         $KMSServerPort = 1688,
@@ -115,9 +105,9 @@ function global:Start-WindowsActivation
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
             ValueFromRemainingArguments = $false,
-            ParameterSetName = 'Cache')]
-        [bool]
-        $CacheEnabled,
+            ParameterSetName = 'ActivateWithKMS')]
+        [switch]
+        $CacheDisabled,
 
         [Parameter(Mandatory = $false,
             ValueFromPipeline = $false,
@@ -157,69 +147,58 @@ function global:Start-WindowsActivation
     }
     Process
     {
-        if ($pscmdlet.ShouldProcess($Computers -join ', ', 'Activate license via KMS'))
+        if ($pscmdlet.ShouldProcess($Computer -join ', ', 'Activate license via KMS'))
         {
-            # Sanitize Computer names
-            $Computers = sanitizeComputerName -Computers $Computers
-
-            Write-Verbose "Creating new CimSession for computer(s) $($Computers -join ', ')"
-            $session = getSession -Credentials $Credentials -Computers $Computers
-
-            Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
-            foreach ($Computer in $Computers)
+            Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
+            foreach ($c in $Computer)
             {
-                Write-Verbose "Computer name: $Computer"
+                Write-Verbose "Creating new CimSession for computer $c"
+                $session = getSession -Computer $c -Credentials $Credentials
 
-                if ($PSCmdlet.ParameterSetName -eq 'Offline')
+                Write-Verbose 'Connecting to SoftwareLicensingService..'
+                $service = getWMIObject -CimSession $session -ClassName SoftwareLicensingService
+
+                try
                 {
-                    try
+                    switch ($PSCmdlet.ParameterSetName)
                     {
-                        Write-Verbose 'Initiating offline activation operation'
-                        activateOffline -ConfirmationId $ConfirmationId -Computer $Computer -Session $session
-                        exit 0
-                    }
-                    catch
-                    {
-                        exit 1
+                        'Offline'
+                        {
+                            Write-Verbose 'Initiating offline activation operation'
+                            activateOffline -CimSession $session -Service $service -$ConfirmationId
+                            exit 0
+                        }
+
+                        'Rearm'
+                        {
+                            Write-Verbose 'Initiating ReArm operation'
+                            rearm -CimSession $session -Service $service
+                            exit 0
+                        }
+
+                        'ActivateWithKMS'
+                        {
+                            Write-Verbose "Changing KMS cache setting as: $($CacheDisabled.IsPresent -eq $false)"
+                            if ($CacheDisabled.IsPresent)
+                            {
+                                $service.DisableKeyManagementServiceHostCaching(1) > $null # Disable caching
+                            }
+
+                            Write-Verbose 'Initiating KMS activation operation'
+                            activateWithKMS $PSBoundParameters -CimSession $session -Service $service
+                            exit 0
+                        }
+
+                        default
+                        {
+                            throw 'Unknown parameter combination' # We do not expect this to be triggered at all but it is here to prevent human errors
+                        }
                     }
                 }
-
-                # Rearm can be run on trial versions only.
-                # Try rearm and exit early.
-                if ($PSCmdlet.ParameterSetName -eq 'Rearm')
+                catch
                 {
-                    try
-                    {
-                        Write-Verbose 'Initiating ReArm operation'
-                        rearm -Computer $Computer -Session $session
-                        exit 0
-                    }
-                    catch
-                    {
-                        exit 1
-                    }
+                    exit 1
                 }
-
-                # No rearm, continue with activating.
-
-                # Set KMS cache preference
-                if ($PSCmdlet.ParameterSetName -eq 'Cache')
-                {
-                    try
-                    {
-                        Write-Verbose "Changing KMS cache setting as: $CacheEnabled"
-                        manageCache -Computer $Computer -Enabled $CacheEnabled -Session $session
-                        exit 0
-                    }
-                    catch
-                    {
-                        exit 1
-                    }
-                }
-
-                # Activation
-                Write-Verbose 'Initiating Activation operation'
-                activateWithKMs -Computer $Computer -KMSServerFQDN $KMSServerFQDN -KMSServerPort $KMSServerPort -Session $session
             }
         }
     }
@@ -258,11 +237,11 @@ Get-WindowsActivation -Offline # Get the offline installation ID for offline -ak
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
-function global:Get-WindowsActivation
+function Get-WindowsActivation
 {
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $true,
-        ConfirmImpact = 'Low',
+        ConfirmImpact = 'None',
         DefaultParameterSetName = 'Basic')]
     param(
         [Parameter(Mandatory = $false,
@@ -276,7 +255,7 @@ function global:Get-WindowsActivation
         [Parameter(ParameterSetName = 'Offline')]
         [AllowNull()]
         [string[]]
-        $Computers = @('localhost'),
+        $Computer = @('localhost'),
 
         # Define credentials other than current user if needed
         [Parameter(Mandatory = $false,
@@ -289,7 +268,7 @@ function global:Get-WindowsActivation
         [Parameter(ParameterSetName = 'Offline')]
         [AllowNull()]
         [PSCredential]
-        $Credentials = $null,
+        $Credentials,
 
         [Parameter(Mandatory = $false, ParameterSetName = 'Extended')]
         [switch]$Extended,
@@ -302,48 +281,51 @@ function global:Get-WindowsActivation
     )
     Begin
     {
+        $PreviousPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Stop'
+        Write-Verbose 'ErrorActionPreference: Stop'
     }
     Process
     {
-        if ($pscmdlet.ShouldProcess($Computers -join ', ', 'Collect license information'))
+        if ($pscmdlet.ShouldProcess($Computer -join ', ', 'Collect license information'))
         {
-            # Sanitize Computer names
-            $Computers = sanitizeComputerName -Computers $Computers
-
-            Write-Verbose "Creating new CimSession for computer(s) $($Computers -join ', ')"
-            $session = getSession -Credentials $Credentials -Computers $Computers
-
-            Write-Verbose "Enumerating computers: $($Computers.Count) computer(s)."
-            foreach ($Computer in $Computers)
+            Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
+            foreach ($c in $Computer)
             {
-                if ($Extended.IsPresent)
+                Write-Verbose "Creating new CimSession for computer $c"
+                $session = getSession -Computer $c -Credentials $Credentials
+
+                switch ($PSCmdlet.ParameterSetName)
                 {
-                    return getExtendedLicenseInformation -Computer $Computer -Session $session
-                }
-                if ($Expiry.IsPresent)
-                {
-                    return getExpiryInformation -Computer $Computer -Session $session
-                }
-                if ($Offline.IsPresent)
-                {
-                    return getInstallationId -Computer $Computer -Session $session
-                }
-                else
-                {
-                    return getBasicLicenseInformation -Computer $Computer -Session $session
+                    'Extended'
+                    {
+                        return queryExtendedLicenseInformation -CimSession $session
+                    }
+                    'Expiry'
+                    {
+                        return queryExpiryInformation -CimSession $session
+                    }
+                    'Offline'
+                    {
+                        return queryOfflineInstallationId -CimSession $session
+                    }
+                    default
+                    {
+                        return queryBasicLicenseInformation -CimSession $session
+                    }
                 }
             }
         }
-    }
-    End
-    {
-        if ($null -ne $session)
+        End
         {
-            Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
+            $ErrorActionPreference = $PreviousPreference
+            if ($null -ne $session)
+            {
+                Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
+            }
         }
     }
 }
-
 
 #region Private functions
 
@@ -363,24 +345,23 @@ enum LicenseStatusCode
 
 #region Activation functions
 
-function activateWithKMs
+function activateWithKMS
 {
     [CmdletBinding()]
     param(
-        [string[]]$Computer,
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+        [wmi]$Service,
         [string]$KMSServerFQDN,
-        [int]$KMSServerPort,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
+        [int]$KMSServerPort
     )
 
     # Check Windows Activation Status
-    $product = getLicenseStatus -Computer $Computer -Session $Session
-    Write-Verbose "License Status: $($product.Status)"
-    if ($product.Activated) { Write-Warning 'The product is already activated.'; return; }
+    $status = (queryLicenseStatus -CimSession $CimSession).LicenseStatus
+    Write-Verbose "License Status: $($status)"
+    if ($status.Activated) { Write-Warning 'The product is already activated.'; return; }
 
     # Get product key
-    $productKey = getProductKey -Computer $Computer -Session $Session
+    $productKey = getProductKeyForKMS -CimSession $CimSession
     Write-Verbose "Product Key (for KMS): $productKey"
 
     # Activate Windows
@@ -390,108 +371,58 @@ function activateWithKMs
     }
     else
     {
-        if ($PSCmdlet.ParameterSetName -eq 'SpecifyKMSServer')
+        # If provided, u[date values for Server FQDN and Port
+        if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
         {
-            activateWithParams -Computer $Computer -ProductKey $productKey -KeyServerName $KMSServerFQDN -KeyServerPort $KMSServerPort -Session $Session
+            $service.SetKeyManagementServiceMachine($KeyServerName)
+        }
+        if ($PSBoundParameters.ContainsKey('KeyServerPort'))
+        {
+            $service.SetKeyManagementServicePort($KeyServerPort)
+        }
+
+        [void]$service.InstallProductKey($ProductKey)
+        Start-Sleep -Seconds 10 # Installing product key takes time.
+        [void]$service.RefreshLicenseStatus()
+        Start-Sleep -Seconds 2 # It also takes time.
+
+
+        # Check Windows Activation Status
+        $license = queryLicenseStatus -CimSession $CimSession
+
+        if ($license.Activated)
+        {
+            Write-Verbose "The computer activated succesfully. Current status: $($license.LicenseStatus)"
         }
         else
         {
-            activateWithDNS -Computer $Computer -ProductKey $productKey -Session $Session
-        }
-
-        $product = getLicenseStatus -Computer $Computer -Session $Session
-        if ($product.Activated)
-        {
-            Write-Verbose "The computer activated succesfully. Current status: $($product.LicenseStatus)"
-        }
-        else
-        {
-            throw "Activation failed. Current status: $($product.LicenseStatus)"
+            throw "Activation failed. Current status: $($license.LicenseStatus)"
         }
     }
-}
-
-function activateWithDNS
-{
-    [CmdletBinding()]
-    param(
-        [string]$Computer,
-        [string]$ProductKey,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
-    )
-    if ($Computer -eq 'localhost')
-    {
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
-    }
-    else
-    {
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
-    }
-
-    [void]$service.InstallProductKey($ProductKey)
-    Start-Sleep -Seconds 10 # Installing product key takes time.
-    [void]$service.RefreshLicenseStatus()
-    Start-Sleep -Seconds 2 # It also takes time.
-}
-
-function activateWithParams
-{
-    param(
-        [string]$Computer,
-        [string]$ProductKey,
-        [string]$KeyServerName,
-        [int]$KeyServerPort,
-        [Microsoft.Management.Infrastructure.CimSession]$Session
-    )
-    if ($Computer -eq 'localhost')
-    {
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
-    }
-    else
-    {
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
-    }
-
-    $service.SetKeyManagementServiceMachine($KeyServerName)
-    $service.SetKeyManagementServicePort($KeyServerPort)
-
-    [void]$service.InstallProductKey($ProductKey)
-    Start-Sleep -Seconds 10 # Installing product key takes time.
-    [void]$service.RefreshLicenseStatus()
-    Start-Sleep -Seconds 2 # It also takes time.
 }
 
 function activateOffline
 {
     [CmdletBinding()]
-    [CmdletBinding()]
     param (
-        [string]
-        $ConfirmationId,
-        [string]$Computer,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+        [string]$ConfirmationId,
+        [wmi]$Service
     )
+
+    # Check Windows Activation Status
+    $status = (queryLicenseStatus -CimSession $CimSession).LicenseStatus
+    Write-Verbose "License Status: $($status)"
+    if ($status.Activated) { Write-Warning 'The product is already activated.'; return; }
 
     $query = "SELECT Version
     FROM SoftwareLicensingProduct
     WHERE PartialProductKey <> null AND Name LIKE 'Win%'"
 
-    if ($Computer -like 'localhost')
-    {
-        Write-Verbose 'Connecting to local computer...'
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
-        $product = Get-CimInstance -Verbose:$false -Query $query -CimSession $Session | cimToWmi
-    }
-    else
-    {
-        Write-Verbose 'Connecting to remote computer...'
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
-        $product = Get-CimInstance -Verbose:$false -Query $query -ComputerName $Computer -CimSession $Session | cimToWmi
-    }
+    Write-Verbose 'Connecting to computer...'
+    $product = getWMIObject -CimSession $CimSession -Query $query
 
-    $InstallationId = getInstallationId -Computer $Computer -CimSession $Session
+    $InstallationId = (queryOfflineInstallationId -CimSession $CimSession).'Offline Installation Id'
     Write-Verbose 'Submitting activation and confirmation IDs...'
     Write-Debug 'Offline Installation ID: $InstallationId'
     Write-Debug 'Confirmation ID: $ConfirmationId'
@@ -501,51 +432,48 @@ function activateOffline
         throw 'Failed to activate with offline activation. Check the Confirmation ID.'
     }
     Write-Verbose 'Updating the license status...'
-    [void]$service.RefreshLicenseStatus()
-    [void]$product.refresh_ # Not sure if it is an undocumented internal command. I have found this gem in slgr.vbs
+    [void]$Service.RefreshLicenseStatus()
+    [void]$product.refresh_ # Not sure if it is an undocumented internal command. I have found this gem in slmgr.vbs
 }
 
 function rearm
 {
     [CmdletBinding()]
     param(
-        [string]$Computer,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+        [wmi]$Service
     )
 
-    if ($Computer -like 'localhost')
+    $status = (queryLicenseStatus -CimSession $CimSession).LicenseStatus
+    if ($status -eq [LicenseStatusCode]::Unknown)
     {
-        Write-Verbose 'Connecting to local computer'
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
-    }
-    else
-    {
-        Write-Verbose 'Connecting to remote computer'
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
+        throw 'License status cannot be collected. It is suggested to restart computer.'
     }
 
-    $isRearmable = canRearm -Computer $Computer -Session $Session
+    Write-Verbose "Current license status: $status"
+
+    # Any status except Unknown, Licensed and Notification
+    $rearmableStatuses = @([LicenseStatusCode]::Unlicensed,
+        [LicenseStatusCode]::OOBGrace,
+        [LicenseStatusCode]::OOTGrace,
+        [LicenseStatusCode]::NonGenuineGrace,
+        [LicenseStatusCode]::ExtendedGrace)
+    $isRearmable = $status -in $rearmableStatuses
     Write-Verbose "Is rearmable: $isRearmable"
 
     if ($isRearmable -eq $false)
     {
         Write-Verbose 'No need to rearm.'
-        continue
-    }
-
-    if ($product.LicenseStatus -eq [LicenseStatusCode]::Unknown)
-    {
-        throw 'License status cannot be collected. It is suggested to restart computer.'
+        return
     }
 
     try
     {
-        if ($service.ReArmWindows() -ne 0)
+        if ($Service.ReArmWindows() -ne 0)
         {
             throw 'Failed to rearm Windows.'
         }
-        [void]$service.RefreshLicenseStatus()
+        [void]$Service.RefreshLicenseStatus()
         Write-Verbose 'Command completed successfully.'
         Write-Verbose 'Please restart the system for the changes to take effect.'
     }
@@ -555,83 +483,26 @@ function rearm
     }
 }
 
-function canRearm
-{
-    [CmdletBinding()]
-    param(
-        [string]$Computer,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
-    )
-
-    $status = (getLicenseStatus -Computer $Computer -Session $Session).LicenseStatus
-
-    # Any status exvept Licensed and Notification
-    $rearmableStatuses = @([LicenseStatusCode]::Unlicensed,
-        [LicenseStatusCode]::OOBGrace,
-        [LicenseStatusCode]::OOTGrace,
-        [LicenseStatusCode]::NonGenuineGrace,
-        [LicenseStatusCode]::ExtendedGrace)
-
-    Write-Verbose "Current license status: $status"
-    return ($status -in $rearmableStatuses)
-}
-
-function manageCache
-{
-    param(
-        [string]$Computer,
-        [bool]$Enabled,
-        [Microsoft.Management.Infrastructure.CimSession]$Session
-    )
-    if ($Computer -eq 'localhost')
-    {
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -CimSession $Session | cimToWmi
-    }
-    else
-    {
-        $service = Get-CimInstance -Verbose:$false -ClassName SoftwareLicensingService -ComputerName $Computer -CimSession $Session | cimToWmi
-    }
-
-    if ($Enabled)
-    {
-        $service.DisableKeyManagementServiceHostCaching(0) > $null # Disable caching
-    }
-    else
-    {
-        $service.DisableKeyManagementServiceHostCaching(1) > $null # Disable caching
-    }
-
-}
-
 #endregion Activation functions
 
 #region Information functions
 
 # KMS Client License Keys - https://docs.microsoft.com/en-us/windows-server/get-started/kmsclientkeys
-# Add as you wish
-function getProductKey
+# Update as needed
+function getProductKeyForKMS
 {
     [CmdletBinding()]
     param(
-        [string]$Computer,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
-    if ($Computer -eq 'localhost')
-    {
-        $OsVersion = ((Get-CimInstance -Verbose:$false -Class Win32_OperatingSystem -CimSession $Session).Caption)
-    }
-    else
-    {
-        $OsVersion = ((Get-CimInstance -Verbose:$false -Class Win32_OperatingSystem -ComputerName $Computer -CimSession $Session).Caption)
-    }
+
+    $OsVersion = ((Get-CimInstance -CimSession $CimSession -Class Win32_OperatingSystem).Caption)
 
     $productKey = switch -Wildcard ($OsVersion)
     {
         # End of support: Oct 13, 2026
         'Microsoft Windows Server 2022 Standard*' { 'VDYBN-27WPP-V4HQT-9VMD4-VMK7H' }
-        'Microsoft Windows Server 2022 Datacenter*' { 'WX4NM-KYWYW-QJJR4-XV3QB-6VM33' } # End of support: Oct 13, 2026
+        'Microsoft Windows Server 2022 Datacenter*' { 'WX4NM-KYWYW-QJJR4-XV3QB-6VM33' }
 
         # End of support: Jan 9, 2024
         'Microsoft Windows Server 2019 Standard*' { 'N69G4-B89J2-4G8F4-WWYCC-J464C' }
@@ -647,12 +518,12 @@ function getProductKey
         'Microsoft Windows 11 Pro' { 'W269N-WFGWX-YVC9B-4J6C9-T83GX' }
 
         # End of support: Oct 14, 2025
-        'Microsoft Windows 10 Enterprise N' { 'DPH2V-TTNVB-4X9Q3-TJR4H-KHJW4' } # End of support: Oct 14, 2025
-        'Microsoft Windows 10 Enterprise' { 'NPPR9-FWDCX-D2C8J-H872K-2YT43' } # End of support: Oct 14, 2025
-        'Microsoft Windows 10 Pro for Workstations' { 'NRG8B-VKK3Q-CXVCJ-9G2XF-6Q84J' } # End of support: Oct 14, 2025
-        'Microsoft Windows 10 Pro for Workstations N' { '9FNHH-K3HBT-3W4TD-6383H-6XYWF' } # End of support: Oct 14, 2025
-        'Microsoft Windows 10 Pro N' { 'MH37W-N47XK-V7XM9-C7227-GCQG9' } # End of support: Oct 14, 2025
-        'Microsoft Windows 10 Pro' { 'W269N-WFGWX-YVC9B-4J6C9-T83GX' } # End of support: Oct 14, 2025
+        'Microsoft Windows 10 Enterprise N' { 'DPH2V-TTNVB-4X9Q3-TJR4H-KHJW4' }
+        'Microsoft Windows 10 Enterprise' { 'NPPR9-FWDCX-D2C8J-H872K-2YT43' }
+        'Microsoft Windows 10 Pro for Workstations' { 'NRG8B-VKK3Q-CXVCJ-9G2XF-6Q84J' }
+        'Microsoft Windows 10 Pro for Workstations N' { '9FNHH-K3HBT-3W4TD-6383H-6XYWF' }
+        'Microsoft Windows 10 Pro N' { 'MH37W-N47XK-V7XM9-C7227-GCQG9' }
+        'Microsoft Windows 10 Pro' { 'W269N-WFGWX-YVC9B-4J6C9-T83GX' }
 
         default { 'Unknown' }
     }
@@ -660,27 +531,19 @@ function getProductKey
     return $productKey
 }
 
-function getLicenseStatus
+function queryLicenseStatus
 {
     [CmdletBinding()]
     param(
-        [string]$Computer,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
     $query = 'SELECT LicenseStatus
     FROM SoftwareLicensingProduct
     WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
-    if ($Computer -eq 'localhost')
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $query -CimSession $Session
-    }
-    else
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $query -ComputerName $Computer -CimSession $Session
-    }
+    $product = getWMIObject -CimSession $CimSession -Query $query
+
     $status = [LicenseStatusCode]( $product | Select-Object LicenseStatus).LicenseStatus
     $activated = $status -eq [LicenseStatusCode]::Licensed
     $result = [PSCustomObject]@{
@@ -690,27 +553,19 @@ function getLicenseStatus
     return $result
 }
 
-function getBasicLicenseInformation
+function queryBasicLicenseInformation
 {
     [CmdletBinding()]
     param (
-        [string]$Computer,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $query = 'SELECT Name,Description,PartialProductKey,LicenseStatus
+    $query = 'SELECT ID,Name,Description,PartialProductKey,LicenseStatus
     FROM SoftwareLicensingProduct
     WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
-    if ($Computer -eq 'localhost')
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $query -CimSession $Session
-    }
-    else
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $query -ComputerName $Computer -CimSession $Session
-    }
+    $product = getWMIObject -CimSession $CimSession -Query $query
+
     $name = $product.Name
     $desc = $product.Description
     $partial = $product.PartialProductKey
@@ -725,27 +580,19 @@ function getBasicLicenseInformation
     return $result
 }
 
-function getExtendedLicenseInformation
+function queryExtendedLicenseInformation
 {
     [CmdletBinding()]
     param (
-        [string]$Computer,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $extendedQuery = 'SELECT Name,Description,ID,ApplicationID,ProductKeyID,ProductKeyChannel,OfflineInstallationId,UseLicenseURL,ValidationURL,PartialProductKey,LicenseStatus,RemainingAppReArmCount,RemainingSkuReArmCount,TrustedTime
+    $query = 'SELECT Name,Description,ID,ApplicationID,ProductKeyID,ProductKeyChannel,OfflineInstallationId,UseLicenseURL,ValidationURL,PartialProductKey,LicenseStatus,RemainingAppReArmCount,RemainingSkuReArmCount,TrustedTime
     FROM SoftwareLicensingProduct
     WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
-    if ($Computer -eq 'localhost')
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $extendedQuery -CimSession $Session
-    }
-    else
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $extendedQuery -ComputerName $Computer -CimSession $Session
-    }
+    $product = getWMIObject -CimSession $CimSession -Query $query
+
     $name = $product.Name
     $desc = $product.Description
     $activationID = $product.ID
@@ -784,27 +631,19 @@ function getExtendedLicenseInformation
     return $result
 }
 
-function getExpiryInformation
+function queryExpiryInformation
 {
     [CmdletBinding()]
     param (
-        [string]$Computer,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $expiryQuery = 'SELECT ID, ApplicationId, PartialProductKey, LicenseIsAddon, Description, Name, LicenseStatus, GracePeriodRemaining
+    $query = 'SELECT ID, ApplicationId, PartialProductKey, LicenseIsAddon, Description, Name, LicenseStatus, GracePeriodRemaining
     FROM SoftwareLicensingProduct
     WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
-    if ($Computer -eq 'localhost')
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $expiryQuery -CimSession $Session
-    }
-    else
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $expiryQuery -ComputerName $Computer -CimSession $Session
-    }
+    $product = getWMIObject -CimSession $CimSession -Query $query
+
     $name = $product.Name
     $status = [LicenseStatusCode]($product.LicenseStatus)
     $graceRemaining = $product.GracePeriodRemaining
@@ -852,27 +691,18 @@ function getExpiryInformation
     return $result
 }
 
-function getInstallationId
+function queryOfflineInstallationId
 {
     [CmdletBinding()]
     param (
-        [string]$Computer,
-        [AllowNull()]
-        [Microsoft.Management.Infrastructure.CimSession]$Session
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $query = 'SELECT OfflineInstallationId, PartialProductKey
+    $query = 'SELECT ID, OfflineInstallationId, PartialProductKey
     FROM SoftwareLicensingProduct
-    WHERE PartialProductKey <> null AND Name LIKE "Windows%"'
+    WHERE (PartialProductKey <> null AND Name LIKE "Windows%")'
 
-    if ($Computer -eq 'localhost')
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $query -CimSession $Session
-    }
-    else
-    {
-        $product = Get-CimInstance -Verbose:$false -Query $query -ComputerName $Computer -CimSession $Session
-    }
+    $product = getWMIObject -CimSession $CimSession -Query $query
 
     $result = [PSCustomObject]@{
         'Offline Installation Id' = $product.OfflineInstallationId
@@ -884,81 +714,86 @@ function getInstallationId
 
 #region Utility functions
 
-function sanitizeComputerName
-{
-    [CmdletBinding()]
-    param(
-        [string[]]$Computers
-    )
-    $result = [System.Collections.Generic.List[string]]::new()
-    foreach ($Computer in $Computers)
-    {
-        $Computer = $Computer.Trim()
-        if ($Computer -eq '.' -or $Computer -eq '127.0.0.1' -or $null -eq $Computer)
-        {
-            return 'localhost'
-        }
-        else
-        {
-            $result += $Computer
-        }
-    }
-    return $result
-}
-
 function getSession
 {
     [CmdletBinding()]
+    [OutputType([CimSession])]
     param (
-        [AllowNull()]
-        [PSCredential]
-        $Credentials = $null,
         [string[]]
-        $Computers
+        $Computer,
+        [Parameter(Mandatory = $false)]
+        [PSCredential]
+        $Credentials
     )
 
-    if ($Computers -eq @('localhost'))
+    Write-Verbose "Creating sessions for $($Computer.Count) hosts"
+
+    if ($Computer.Count -eq 1 -and $Computer[0] -eq 'localhost' -or $Computer[0] -eq '.' -or $Computer[0] -eq '127.0.0.1' -or $null -eq $Computer[0])
     {
+        Write-Verbose 'Using DCOM protocol for CIM session'
         if ($null -eq $Credentials)
         {
-            Write-Verbose 'No credentials provided, using current session'
             $session = New-CimSession -Name 'SlmgrLocalSession'
         }
         else
         {
-            Write-Verbose "Credentials provided for user $($Credentials.UserName). Creating new session."
             $session = New-CimSession -Name 'SlmgrLocalSession' -Credential $Credentials
         }
     }
-    else
+    else # if multiple hosts are given including localhost, then it will try to use WinRM, instead of DCOM.
     {
-        if ($null -eq $Credentials)
-        {
-            Write-Verbose 'No credentials provided, using current session'
-            $session = New-CimSession -Name 'SlmgrRemoteSession' -ComputerName $Computers
-        }
-        else
-        {
-            Write-Verbose "Credentials provided for user $($Credentials.UserName). Creating new session."
-            $session = New-CimSession -Name 'SlmgrRemoteSession' -Credential $Credentials -ComputerName $Computers
-        }
+        Write-Verbose 'Using WinRM protocol for CIM session'
+        $session = New-CimSession $PSBoundParameters -Name 'SlmgrRemoteSession'
     }
     return $session
 }
 
 # Reference: https://rohnspowershellblog.wordpress.com/2013/06/15/converting-a-ciminstance-to-a-managementobject-and-back/
-function cimToWmi
+function getWMIObject
 {
-
     [CmdletBinding()]
-    param(
-        [Parameter(Mandatory, ValueFromPipeline)]
-        [ciminstance] $InputObject
+    param (
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+
+        [Parameter(Mandatory = $true,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $true,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'ClassName')]
+        [string]$ClassName,
+
+        [Parameter(Mandatory = $true,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $true,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'Query')]
+        [string]$Query,
+
+        [Parameter(Mandatory = $false,
+            ValueFromPipeline = $true,
+            ValueFromPipelineByPropertyName = $true,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'InputObject')]
+        [ValidateNotNull]
+        [ciminstance]$InputObject
     )
 
-    process
+    Process
     {
-        $Keys = $InputObject.CimClass.CimClassProperties |
+        if ($PSCmdlet.ParameterSetName -eq 'Query')
+        {
+            $Instance = Get-CimInstance -CimSession $CimSession -Query $Query
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq 'ClassName')
+        {
+            $Instance = Get-CimInstance -CimSession $CimSession -ClassName $ClassName
+        }
+        else
+        {
+            $Instance = $InputObject
+        }
+
+        $Keys = $Instance.CimClass.CimClassProperties |
         Where-Object { $_.Qualifiers.Name -contains 'Key' } |
         Select-Object Name, CimType |
         Sort-Object Name
@@ -971,13 +806,13 @@ function cimToWmi
                 'Boolean|.Int\d+'
                 {
                     # No quotes surrounding value:
-                    $Value = $InputObject.$KeyName
+                    $Value = $Instance.$KeyName
                 }
 
                 'DateTime'
                 {
                     # Conver to WMI datetime
-                    $Value = '"{0}"' -f [System.Management.ManagementDateTimeConverter]::ToDmtfDateTime($InputObject.$KeyName)
+                    $Value = '"{0}"' -f [System.Management.ManagementDateTimeConverter]::ToDmtfDateTime($Instance.$KeyName)
                 }
 
                 'Reference'
@@ -988,7 +823,7 @@ function cimToWmi
                 default
                 {
                     # Treat it like a string and cross your fingers:
-                    $Value = '"{0}"' -f ($InputObject.$KeyName -replace "`"", "\`"")
+                    $Value = '"{0}"' -f ($Instance.$KeyName -replace "`"", "\`"")
                 }
             }
             '{0}={1}' -f $KeyName, $Value
@@ -1004,9 +839,9 @@ function cimToWmi
             $KeyValuePairsString = '=@'
         }
 
-        return [wmi]('\\{0}\{1}:{2}{3}' -f $InputObject.CimSystemProperties.ServerName,
-                               ($InputObject.CimSystemProperties.Namespace -replace '/', '\'),
-            $InputObject.CimSystemProperties.ClassName,
+        return [wmi]('\\{0}\{1}:{2}{3}' -f $Instance.CimSystemProperties.ServerName,
+                               ($Instance.CimSystemProperties.Namespace -replace '/', '\'),
+            $Instance.CimSystemProperties.ClassName,
             $KeyValuePairsString)
     }
 }
