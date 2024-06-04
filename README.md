@@ -147,6 +147,9 @@ Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServ
 # ReArm the trial period. ReArming already licensed devices can break current license issues.
 # Guard clauses wil protect 99% but cannot guarantee 100%.
 Start-WindowsActivation -ReArm
+
+# Used for offline -aka phone- activation
+Start-WindowsActivation -Offline -ConfirmationID <confirmation ID>
 ```
 
 ### `Get-WindowsActivation` cmdlet
@@ -167,6 +170,8 @@ Get-WindowsActivation -Computer WS01
 # Collects basic license information of computer WS01 over WinRM using different credentials
 Get-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
 
+# Get the offline installation ID for offline -aka phone- activation
+Get-WindowsActivation -Offline
 ```
 
 ### Advanced usage
@@ -177,9 +182,8 @@ This module allows users to activate computers remotely as well as reporting.
 $computers = @('WS01', 'WS02', 'WS03')
 
 # Iterate over the list and activate
-foreach ($computer in $computers) {
-    Start-WindowsActivation -Computer $computer -Verbose
-}
+Start-WindowsActivation -Computer $computers -Verbose
+
 
 # Generate a report of activation status
 $report = $computers | ForEach-Object {
