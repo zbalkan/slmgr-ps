@@ -606,7 +606,7 @@ function queryExtendedLicenseInformation
     $status = [LicenseStatusCode]( $product.LicenseStatus)
     $remainingAppRearm = $product.RemainingAppReArmCount
     $remainingSkuRearm = $product.RemainingSkuReArmCount
-    $trustedTime = ''
+    $trustedTime = [string]::Empty
     if ([string]::IsNullOrEmpty($product.Trustedtime) -eq $false)
     {
         $trustedTime = [datetime]::Parse($product.Trustedtime)
@@ -748,6 +748,10 @@ function getSession
     return $session
 }
 
+# The WMI commands are not supported on PowerShell 6+ as they are deprecated -allegedly.
+# They would work with PS5 though. To be safe, we used Get-CimInstance instead of 
+# Get- WMIObject. Unfortunately, not all properties and methods are available on the CIM
+# instances. Therefore, we convert the CIM instances to WMI objects to be able to access those methods.
 # Reference: https://rohnspowershellblog.wordpress.com/2013/06/15/converting-a-ciminstance-to-a-managementobject-and-back/
 function getWMIObject
 {
