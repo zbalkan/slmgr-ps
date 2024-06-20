@@ -3,7 +3,7 @@ function Invoke-Rearm
     [CmdletBinding()]
     param(
         [Microsoft.Management.Infrastructure.CimSession]$CimSession,
-        [wmi]$Service
+        [CimInstance]$Service
     )
 
     $status = (Get-LicenseStatus -CimSession $CimSession).LicenseStatus
@@ -31,16 +31,16 @@ function Invoke-Rearm
 
     try
     {
-        if ($Service.ReArmWindows() -ne 0)
+        if ($($Service | Invoke-CimMethod -MethodName ReArmWindows).ReturnValue -ne 0)
         {
             throw 'Failed to rearm Windows.'
         }
-        [void]$Service.RefreshLicenseStatus()
+        $Service | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null
         Write-Verbose 'Command completed successfully.'
         Write-Verbose 'Please restart the system for the changes to take effect.'
     }
-    catch [System.Management.Automation.MethodInvocationException]
+    catch
     {
-        throw 'Rearm failed.'
+        throw
     }
 }
