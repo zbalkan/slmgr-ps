@@ -3,7 +3,7 @@ function Invoke-KMSActivation
     [CmdletBinding()]
     param(
         [Microsoft.Management.Infrastructure.CimSession]$CimSession,
-        [wmi]$Service,
+        [CimInstance]$Service,
         [string]$KMSServerFQDN,
         [int]$KMSServerPort
     )
@@ -27,16 +27,17 @@ function Invoke-KMSActivation
         # If provided, u[date values for Server FQDN and Port
         if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
         {
-            $service.SetKeyManagementServiceMachine($KeyServerName)
+            $service | Invoke-CimMethod -MethodName SetKeyManagementServiceMachine -Arguments @{ MachineName = $KeyServerPort }
         }
         if ($PSBoundParameters.ContainsKey('KeyServerPort'))
         {
-            $service.SetKeyManagementServicePort($KeyServerPort)
+            $service | Invoke-CimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $KeyServerPort }
         }
 
-        [void]$service.InstallProductKey($ProductKey)
+        $service | Invoke-CimMethod -MethodName InstallProductKey -Arguments @{ $ProductKey = $ProductKey } | Out-Null
+
         Start-Sleep -Seconds 10 # Installing product key takes time.
-        [void]$service.RefreshLicenseStatus()
+        $service | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null
         Start-Sleep -Seconds 2 # It also takes time.
 
 
