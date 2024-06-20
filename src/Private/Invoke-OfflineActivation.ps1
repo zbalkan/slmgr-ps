@@ -4,7 +4,7 @@ function Invoke-OfflineActivation
     param (
         [Microsoft.Management.Infrastructure.CimSession]$CimSession,
         [string]$ConfirmationId,
-        [wmi]$Service
+        [CimInstance]$Service
     )
 
     # Check Windows Activation Status
@@ -12,23 +12,30 @@ function Invoke-OfflineActivation
     Write-Verbose "License Status: $($status)"
     if ($status.Activated) { Write-Warning 'The product is already activated.'; return; }
 
-    $query = "SELECT Version
+    $query = 'SELECT ID, Name, PartialProductKey
     FROM SoftwareLicensingProduct
-    WHERE PartialProductKey <> null AND Name LIKE 'Win%'"
+    WHERE (PartialProductKey <> null AND Name LIKE "Windows%")'
 
     Write-Verbose 'Connecting to computer...'
-    $product = Get-CustomWMIObject -CimSession $CimSession -Query $query
+    $product = Get-CimInstance -CimSession $CimSession -Query $query
 
     $InstallationId = (Get-OfflineInstallationId -CimSession $CimSession).'Offline Installation Id'
     Write-Verbose 'Submitting activation and confirmation IDs...'
     Write-Debug 'Offline Installation ID: $InstallationId'
     Write-Debug 'Confirmation ID: $ConfirmationId'
 
-    if ([int]$product.DepositOfflineConfirmationId($InstallationId, $ConfirmationId) -ne 0)
-    {
-        throw 'Failed to activate with offline activation. Check the Confirmation ID.'
+    $arguments = @{
+        InstallationId = $InstallationId
+        ConfirmationId = $ConfirmationId
     }
+
+    try
+    {
+        if ($(($product | Invoke-CimMethod -MethodName DepositOfflineConfirmationId -Arguments $arguments)).ReturnValue -ne 0)
+        { throw 'Failed to activate with offline activation. Check the Confirmation ID.' }
+    }
+    catch { throw }
+
     Write-Verbose 'Updating the license status...'
-    [void]$Service.RefreshLicenseStatus()
-    [void]$product.refresh_ # Not sure if it is an undocumented internal command. I have found this gem in slmgr.vbs
+    $Service | Invoke-CimMethod -MethodName RefreshLicenseStatus
 }
