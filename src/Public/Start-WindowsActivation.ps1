@@ -154,7 +154,7 @@ function Start-WindowsActivation
                 $session = Get-Session -Computer $c -Credentials $Credentials
 
                 Write-Verbose 'Connecting to SoftwareLicensingService..'
-                $service = Get-CustomWMIObject -CimSession $session -ClassName SoftwareLicensingService
+                $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService
 
                 try
                 {
@@ -179,7 +179,8 @@ function Start-WindowsActivation
                             Write-Verbose "Changing KMS cache setting as: $($CacheDisabled.IsPresent -eq $false)"
                             if ($CacheDisabled.IsPresent)
                             {
-                                $service.DisableKeyManagementServiceHostCaching(1) > $null # Disable caching
+                                $arguments = @{ DisableCaching = 1 }
+                                $Service | Invoke-CimMethod -MethodName DisableKeyManagementServiceHostCaching -Arguments $arguments | Out-Null # Disable caching
                             }
 
                             Write-Verbose 'Initiating KMS activation operation'
