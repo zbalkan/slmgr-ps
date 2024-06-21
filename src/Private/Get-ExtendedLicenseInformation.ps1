@@ -26,9 +26,9 @@ function Get-ExtendedLicenseInformation
     $remainingAppRearm = $product.RemainingAppReArmCount
     $remainingSkuRearm = $product.RemainingSkuReArmCount
     $trustedTime = [datetime]::MinValue
-    if ([string]::IsNullOrEmpty($product.TrustedTime) -eq $false)
+    if ($null -ne $product.TrustedTime)
     {
-        $trustedTime = [System.Management.ManagementDateTimeConverter]::ToDateTime($product.Trustedtime)
+        $trustedTime = $product.TrustedTime
     }
 
     $result = [PSCustomObject]@{
