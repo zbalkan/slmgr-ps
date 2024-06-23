@@ -215,3 +215,9 @@ Start-WindowsActivation -Computer WS01 -Debug
 ```
 
 In case of any problems, feel free to create an issue.
+
+## Contributing
+
+The target is to be a feature complete alternative to the `slmgr.vbs` script. Therefore, any PR adding new features adding new features out of this scope until version 1.0.0 will be kept on hold. Please refer to the comparison table when developing features. Any issues and PRs about fixing the bugs are always welcome.
+
+Please refer to the [CONTRIBUTING.MD](CONTRIBUTING.MD) for PR guidelines.
