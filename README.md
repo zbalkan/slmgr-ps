@@ -8,10 +8,10 @@ A drop in replacement for `slmgr.vbs` script. The script is in `alpha` state. Yo
 
 ## About this module
 
-One of my hardening guideline is getting rid of vbscript in every environment.
+One of my hardening guideline is getting rid of VBscript in every environment.
 
-- I disabled `wscript` and `cscript` executables.
-![alt text](images/blocked.png "Blocked cscript and wscript")
+- I disabled [Windows Script Host](https://blog.f-secure.com/how-to-disable-windows-script-host/), blocking `cscript` and `wscript`.
+![alt text](images/blocked.png "Blocked WSH")
 
 - I changed the file-type association of `.vbs` to be opened with Notepad, and cannot be executed.
 ![alt text](images/notepad.png ".vbs extension is not an executable.")
@@ -111,9 +111,9 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 - You can provide an array of computer names, and it is up to you how you get them. It's just PowerShell.
 - It works on PowerShell version 5.0 and above. It means PowerShell 7.0 is ok, too.
-- It uses WinRM for remote computers. Check if remote computers are accessible over WinRM.
-- It includes a list of KMS keys, so that you don't have to for most of them. It covers some of the versions though, not all of them.
-- It works even if you disabled `cscript` and `wscript` - it's PowerShell!
+- It uses WinRM for remote computers. Ensure that remote computers are accessible over WinRM.
+- It includes a list of KMS keys, so that you don't have to for most of them -not all.
+- It works even if you disabled WSH, therefore, `cscript` and `wscript` - it's PowerShell!
 - The code is documented and readable, so that you can improve according to your needs.
 
 ## Usage
