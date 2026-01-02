@@ -12,6 +12,10 @@ function Get-KMSKey
 
     $productKey = switch -Wildcard ($OsVersion)
     {
+        # End of support: Oct 09, 2029
+        'Microsoft Windows Server 2025 Standard*' { 'TVRH6-WHNXV-R9WG3-9XRFY-MY832' }
+        'Microsoft Windows Server 2025 Datacenter*' { 'D764K-2NDRG-47T6Q-P8T8W-YP6DF' }
+        
         # End of support: Oct 13, 2026
         'Microsoft Windows Server 2022 Standard*' { 'VDYBN-27WPP-V4HQT-9VMD4-VMK7H' }
         'Microsoft Windows Server 2022 Datacenter*' { 'WX4NM-KYWYW-QJJR4-XV3QB-6VM33' }
