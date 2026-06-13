@@ -9,48 +9,53 @@ function Invoke-KMSActivation
     )
 
     # Check Windows Activation Status
-    $status = (Get-LicenseStatus -CimSession $CimSession).LicenseStatus
-    Write-Verbose "License Status: $($status)"
-    if ($status.Activated) { Write-Warning 'The product is already activated.'; return; }
+    $licenseInfo = Get-LicenseStatus -CimSession $CimSession
+    Write-Verbose "License Status: $($licenseInfo.'License Status')"
+    if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return; }
 
     # Get product key
     $productKey = Get-KMSKey -CimSession $CimSession
     Write-Verbose "Product Key (for KMS): $productKey"
 
-    # Activate Windows
     if ($productKey -eq 'Unknown')
     {
         throw 'Unknown OS.'
     }
     else
     {
-        # If provided, u[date values for Server FQDN and Port
+        # If provided, update values for Server FQDN and Port
         if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
         {
-            $service | Invoke-CimMethod -MethodName SetKeyManagementServiceMachine -Arguments @{ MachineName = $KeyServerPort }
+            $Service | Invoke-CimMethod -MethodName SetKeyManagementServiceMachine -Arguments @{ MachineName = $KMSServerFQDN } | Out-Null
         }
-        if ($PSBoundParameters.ContainsKey('KeyServerPort'))
+        if ($PSBoundParameters.ContainsKey('KMSServerPort'))
         {
-            $service | Invoke-CimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $KeyServerPort }
+            $Service | Invoke-CimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $KMSServerPort } | Out-Null
         }
 
-        $service | Invoke-CimMethod -MethodName InstallProductKey -Arguments @{ $ProductKey = $ProductKey } | Out-Null
+        $Service | Invoke-CimMethod -MethodName InstallProductKey -Arguments @{ ProductKey = $productKey } | Out-Null
 
         Start-Sleep -Seconds 10 # Installing product key takes time.
-        $service | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null
-        Start-Sleep -Seconds 2 # It also takes time.
+        $Service | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null
+        Start-Sleep -Seconds 2
 
+        # Trigger KMS network check-in via SoftwareLicensingProduct.Activate()
+        $activationQuery = 'SELECT ID, LicenseStatus, Name
+        FROM SoftwareLicensingProduct
+        WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
+        $product = Get-CimInstance -CimSession $CimSession -Query $activationQuery | Select-Object -First 1
+        $product | Invoke-CimMethod -MethodName Activate | Out-Null
 
         # Check Windows Activation Status
         $license = Get-LicenseStatus -CimSession $CimSession
 
         if ($license.Activated)
         {
-            Write-Verbose "The computer activated succesfully. Current status: $($license.LicenseStatus)"
+            Write-Verbose "The computer activated successfully. Current status: $($license.'License Status')"
         }
         else
         {
-            throw "Activation failed. Current status: $($license.LicenseStatus)"
+            throw "Activation failed. Current status: $($license.'License Status')"
         }
     }
 }

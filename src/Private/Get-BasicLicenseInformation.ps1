@@ -10,7 +10,7 @@ function Get-BasicLicenseInformation
     FROM SoftwareLicensingProduct
     WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
-    $product = Get-CimInstance -CimSession $CimSession -Query $query
+    $product = Get-CimInstance -CimSession $CimSession -Query $query | Select-Object -First 1
 
     $name = $product.Name
     $desc = $product.Description

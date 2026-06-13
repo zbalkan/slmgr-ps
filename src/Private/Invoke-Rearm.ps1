@@ -6,17 +6,17 @@ function Invoke-Rearm
         [CimInstance]$Service
     )
 
-    $status = (Get-LicenseStatus -CimSession $CimSession).LicenseStatus
-    if ($status -eq [LicenseStatusCode]::Unknown)
+    $licenseInfo = Get-LicenseStatus -CimSession $CimSession
+    $status = $licenseInfo.'License Status'
+    if ($null -eq $status)
     {
         throw 'License status cannot be collected. It is suggested to restart computer.'
     }
 
     Write-Verbose "Current license status: $status"
 
-    # Any status except Unknown, Licensed and Notification
-    $rearmableStatuses = @([LicenseStatusCode]::Unlicensed,
-        [LicenseStatusCode]::OOBGrace,
+    # Rearm is only meaningful for grace/non-genuine states, not Licensed or Notification
+    $rearmableStatuses = @([LicenseStatusCode]::OOBGrace,
         [LicenseStatusCode]::OOTGrace,
         [LicenseStatusCode]::NonGenuineGrace,
         [LicenseStatusCode]::ExtendedGrace)
@@ -25,7 +25,7 @@ function Invoke-Rearm
 
     if ($isRearmable -eq $false)
     {
-        Write-Verbose 'No need to rearm.'
+        Write-Warning "Rearm is not applicable for the current license status: $status"
         return
     }
 

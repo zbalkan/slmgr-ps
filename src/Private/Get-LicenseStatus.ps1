@@ -10,9 +10,9 @@ function Get-LicenseStatus
     FROM SoftwareLicensingProduct
     WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
 
-    $product = Get-CimInstance -CimSession $CimSession -Query $query
+    $product = Get-CimInstance -CimSession $CimSession -Query $query | Select-Object -First 1
 
-    $status = [LicenseStatusCode]($product.LicenseStatus).LicenseStatus
+    $status = [LicenseStatusCode]($product.LicenseStatus)
     $activated = $status -eq [LicenseStatusCode]::Licensed
     $result = [PSCustomObject]@{
         'License Status' = $status
