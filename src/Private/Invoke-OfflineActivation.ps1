@@ -7,33 +7,25 @@ function Invoke-OfflineActivation
         [CimInstance]$Service
     )
 
-    # Check Windows Activation Status
     $licenseInfo = Get-LicenseStatus -CimSession $CimSession
-    Write-Verbose "License Status: $($licenseInfo.'License Status')"
-    if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return; }
+    Write-Verbose "License Status: $($licenseInfo.LicenseStatus)"
+    if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return }
 
-    $query = 'SELECT ID, Name, PartialProductKey
-    FROM SoftwareLicensingProduct
-    WHERE (PartialProductKey IS NOT NULL AND Name LIKE "Windows%")'
+    $product = Get-WindowsLicensingProduct -CimSession $CimSession
 
-    Write-Verbose 'Connecting to computer...'
-    $product = Get-CimInstance -CimSession $CimSession -Query $query | Select-Object -First 1
+    # Accept dashes, spaces, or plain digits; strip separators before submission
+    $normalizedCid = $ConfirmationId -replace '[\s\-]', ''
+    $installationId = (Get-OfflineInstallationId -CimSession $CimSession).OfflineInstallationId
 
-    $InstallationId = (Get-OfflineInstallationId -CimSession $CimSession).'Offline Installation Id'
     Write-Verbose 'Submitting activation and confirmation IDs...'
-    Write-Debug "Offline Installation ID: $InstallationId"
-    Write-Debug "Confirmation ID: $ConfirmationId"
+    Write-Debug "Offline Installation ID: $installationId"
+    Write-Debug "Confirmation ID: $normalizedCid"
 
-    $arguments = @{
-        InstallationId = $InstallationId
-        ConfirmationId = $ConfirmationId
-    }
-
-    if (($product | Invoke-CimMethod -MethodName DepositOfflineConfirmationId -Arguments $arguments).ReturnValue -ne 0)
-    {
-        throw 'Failed to activate with offline activation. Check the Confirmation ID.'
+    $product | Invoke-SppCimMethod -MethodName DepositOfflineConfirmationId -Arguments @{
+        InstallationId = $installationId
+        ConfirmationId = $normalizedCid
     }
 
     Write-Verbose 'Updating the license status...'
-    $Service | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null
+    $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
 }

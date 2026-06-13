@@ -5,23 +5,28 @@
 .Synopsis
 Activates Windows via KMS
 .DESCRIPTION
-A drop in replacement for slmgr script
+A drop in replacement for slmgr script. By default attempts KMS activation using the
+product key already installed on the machine. Use -UseKmsClientKey to also install the
+KMS client setup key (GVLK) for the detected OS edition before activating. This is a
+material licensing change and is therefore opt-in.
 .INPUTS
 string[]. You can pass the computer names
 .OUTPUTS
-None if successful. Error message if there is an error.
+None if successful. Throws on error.
 .EXAMPLE
-Start-WindowsActivation -Verbose # Activates the local computer
+Start-WindowsActivation -Verbose # Activates the local computer using its existing product key
 .EXAMPLE
-Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Activates the computer named WS01 using different credentials
+Start-WindowsActivation -UseKmsClientKey -Verbose # Installs the GVLK for the detected OS edition then activates
 .EXAMPLE
-Start-WindowsActivation -Computer WS01, WS02 -CacheDisabled # Disables the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
+Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Activates WS01 over WinRM
 .EXAMPLE
-Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500 # Activates the computer named WS01 against server.domain.net:2500
+Start-WindowsActivation -Computer WS01, WS02 -CacheDisabled # Disables the KMS cache on WS01 and WS02
 .EXAMPLE
-Start-WindowsActivation -ReArm # ReArm the trial period. ReArming already licensed devices can break current license issues. Guard clauses wil protect 99% but cannot guarantee 100%.
+Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500 # Activates against a specific KMS server
 .EXAMPLE
-Start-WindowsActivation -Offline -ConfirmationID 123456-123456-123456-123456-123456-123456-123456-123456-123456 # Used for offline -aka phone- activation
+Start-WindowsActivation -ReArm # ReArm the trial period (guard clauses apply but cannot guarantee 100% safety)
+.EXAMPLE
+Start-WindowsActivation -Offline -ConfirmationID 123456-123456-123456-123456-123456-123456-123456-123456-123456 # Phone activation
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
@@ -107,6 +112,17 @@ function Start-WindowsActivation
         [switch]
         $CacheDisabled,
 
+        # Installs the KMS client setup key (GVLK) for the detected OS edition before
+        # attempting activation. Only needed when the machine currently has a MAK or retail
+        # key and must be switched to volume/KMS licensing. This is a material licensing change.
+        [Parameter(Mandatory = $false,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'ActivateWithKMS')]
+        [switch]
+        $UseKmsClientKey,
+
         [Parameter(Mandatory = $false,
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
@@ -121,15 +137,15 @@ function Start-WindowsActivation
             ParameterSetName = 'Offline')]
         [ValidateScript(
             {
-                # Standard Windows phone activation CID: 9 groups of 6 digits separated by dashes
-                $pattern = [Regex]::new('^\d{6}(-\d{6}){8}$')
-                if ($pattern.Matches($_).Count -gt 0)
+                # Accept 54 digits (9 groups × 6), optionally separated by dashes or spaces
+                $stripped = $_ -replace '[\s\-]', ''
+                if ($stripped -match '^\d{54}$')
                 {
                     $true
                 }
                 else
                 {
-                    throw "$_ is invalid. Please provide a valid Confirmation Id (9 groups of 6 digits separated by dashes)"
+                    throw "$_ is not a valid Confirmation ID. Expected 54 digits (9 groups of 6), optionally separated by dashes or spaces."
                 }
             })]
         [ValidateNotNullOrEmpty()]
@@ -145,69 +161,68 @@ function Start-WindowsActivation
     }
     Process
     {
-        if ($pscmdlet.ShouldProcess($Computer -join ', ', 'Activate license via KMS'))
+        Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
+        foreach ($c in $Computer)
         {
-            Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
-            foreach ($c in $Computer)
+            if (-not $pscmdlet.ShouldProcess($c, "Activate Windows ($($PSCmdlet.ParameterSetName))"))
             {
-                Write-Verbose "Creating new CimSession for computer $c"
-                $session = $null
-                try
+                continue
+            }
+
+            Write-Verbose "Creating new CimSession for computer $c"
+            $session = $null
+            try
+            {
+                $session = Get-Session -Computer $c -Credentials $Credentials
+
+                Write-Verbose 'Connecting to SoftwareLicensingService...'
+                $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService
+
+                switch ($PSCmdlet.ParameterSetName)
                 {
-                    $session = Get-Session -Computer $c -Credentials $Credentials
-
-                    Write-Verbose 'Connecting to SoftwareLicensingService...'
-                    $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService
-
-                    switch ($PSCmdlet.ParameterSetName)
+                    'Offline'
                     {
-                        'Offline'
+                        Write-Verbose 'Initiating offline activation operation'
+                        Invoke-OfflineActivation -CimSession $session -Service $service -ConfirmationId $ConfirmationId
+                    }
+
+                    'Rearm'
+                    {
+                        Write-Verbose 'Initiating ReArm operation'
+                        Invoke-Rearm -CimSession $session -Service $service
+                    }
+
+                    'ActivateWithKMS'
+                    {
+                        if ($CacheDisabled.IsPresent)
                         {
-                            Write-Verbose 'Initiating offline activation operation'
-                            Invoke-OfflineActivation -CimSession $session -Service $service -ConfirmationId $ConfirmationId
+                            Write-Verbose 'Disabling KMS host caching'
+                            $service | Invoke-SppCimMethod -MethodName DisableKeyManagementServiceHostCaching
                         }
 
-                        'Rearm'
-                        {
-                            Write-Verbose 'Initiating ReArm operation'
-                            Invoke-Rearm -CimSession $session -Service $service
-                        }
+                        Write-Verbose 'Initiating KMS activation operation'
+                        $kmsParams = @{ CimSession = $session; Service = $service }
+                        if ($PSBoundParameters.ContainsKey('KMSServerFQDN')) { $kmsParams['KMSServerFQDN'] = $KMSServerFQDN }
+                        if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $kmsParams['KMSServerPort'] = $KMSServerPort }
+                        if ($UseKmsClientKey.IsPresent) { $kmsParams['InstallKmsClientKey'] = $true }
+                        Invoke-KMSActivation @kmsParams
+                    }
 
-                        'ActivateWithKMS'
-                        {
-                            if ($CacheDisabled.IsPresent)
-                            {
-                                Write-Verbose 'Disabling KMS cache'
-                                $service | Invoke-CimMethod -MethodName DisableKeyManagementServiceHostCaching | Out-Null
-                            }
-                            else
-                            {
-                                Write-Verbose 'KMS cache: leaving enabled'
-                            }
-
-                            Write-Verbose 'Initiating KMS activation operation'
-                            $kmsParams = @{ CimSession = $session; Service = $service }
-                            if ($PSBoundParameters.ContainsKey('KMSServerFQDN')) { $kmsParams['KMSServerFQDN'] = $KMSServerFQDN }
-                            if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $kmsParams['KMSServerPort'] = $KMSServerPort }
-                            Invoke-KMSActivation @kmsParams
-                        }
-
-                        default
-                        {
-                            throw 'Unknown parameter combination' # We do not expect this to be triggered at all but it is here to prevent human errors
-                        }
+                    default
+                    {
+                        throw 'Unknown parameter combination'
                     }
                 }
-                catch
+            }
+            catch
+            {
+                throw
+            }
+            finally
+            {
+                if ($null -ne $session)
                 {
-                    throw
-                }
-                finally
-                {
-                    if ($null -ne $session)
-                    {
-                        Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
-                    }
+                    Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
                 }
             }
         }

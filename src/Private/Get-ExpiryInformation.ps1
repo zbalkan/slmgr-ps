@@ -6,18 +6,13 @@ function Get-ExpiryInformation
         [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $query = 'SELECT ID, Description, Name, LicenseStatus, GracePeriodRemaining
-    FROM SoftwareLicensingProduct
-    WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
-
-    $product = Get-CimInstance -CimSession $CimSession -Query $query | Select-Object -First 1
-
-    $name = $product.Name
+    $product = Get-WindowsLicensingProduct -CimSession $CimSession
     $status = [LicenseStatusCode]($product.LicenseStatus)
     $graceRemaining = $product.GracePeriodRemaining
 
     $expirationInfo = switch ($product.LicenseStatus)
     {
+        0 { [LicenseStatusCode]::Unlicensed.ToString() }
         1
         {
             if ($null -eq $graceRemaining -or $graceRemaining -eq 0)
@@ -41,21 +36,18 @@ function Get-ExpiryInformation
                 }
             }
         }
-        2 { $endDate = (Get-Date).AddMinutes($graceRemaining); "Initial grace period ends $endDate" }
-        3 { $endDate = (Get-Date).AddMinutes($graceRemaining); "Additional grace period ends $endDate" }
-        4 { $endDate = (Get-Date).AddMinutes($graceRemaining); "Non-genuine grace period ends $endDate" }
+        2 { "Initial grace period ends $((Get-Date).AddMinutes($graceRemaining))" }
+        3 { "Additional grace period ends $((Get-Date).AddMinutes($graceRemaining))" }
+        4 { "Non-genuine grace period ends $((Get-Date).AddMinutes($graceRemaining))" }
         5 { 'Windows is in Notification mode' }
-        6 { $endDate = (Get-Date).AddMinutes($graceRemaining); "Extended grace period ends $endDate" }
-        Default
-        {
-            throw 'Unexpected license status'
-        }
+        6 { "Extended grace period ends $((Get-Date).AddMinutes($graceRemaining))" }
+        Default { throw 'Unexpected license status' }
     }
 
     $result = [PSCustomObject]@{
-        Name                     = $name
-        'License Status'         = $status
-        'Expiration Information' = $expirationInfo
+        Name           = $product.Name
+        LicenseStatus  = $status
+        ExpirationInfo = $expirationInfo
     }
     return $result
 }

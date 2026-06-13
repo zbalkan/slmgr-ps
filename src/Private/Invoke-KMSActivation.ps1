@@ -5,57 +5,49 @@ function Invoke-KMSActivation
         [Microsoft.Management.Infrastructure.CimSession]$CimSession,
         [CimInstance]$Service,
         [string]$KMSServerFQDN,
-        [int]$KMSServerPort
+        [int]$KMSServerPort,
+        [switch]$InstallKmsClientKey
     )
 
-    # Check Windows Activation Status
     $licenseInfo = Get-LicenseStatus -CimSession $CimSession
-    Write-Verbose "License Status: $($licenseInfo.'License Status')"
-    if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return; }
+    Write-Verbose "License Status: $($licenseInfo.LicenseStatus)"
+    if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return }
 
-    # Get product key
-    $productKey = Get-KMSKey -CimSession $CimSession
-    Write-Verbose "Product Key (for KMS): $productKey"
-
-    if ($productKey -eq 'Unknown')
+    if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
     {
-        throw 'Unknown OS.'
+        $Service | Invoke-SppCimMethod -MethodName SetKeyManagementServiceMachine -Arguments @{ MachineName = $KMSServerFQDN }
+    }
+    if ($PSBoundParameters.ContainsKey('KMSServerPort'))
+    {
+        $Service | Invoke-SppCimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $KMSServerPort }
+    }
+
+    if ($InstallKmsClientKey.IsPresent)
+    {
+        $productKey = Get-KMSKey -CimSession $CimSession
+        if ($productKey -eq 'Unknown')
+        {
+            throw 'No KMS client setup key is available for this OS edition. Provide a product key manually or use a recognised edition.'
+        }
+        Write-Verbose 'Installing KMS client setup key'
+        $Service | Invoke-SppCimMethod -MethodName InstallProductKey -Arguments @{ ProductKey = $productKey }
+        Start-Sleep -Seconds 10 # Installing product key takes time.
+        $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
+        Start-Sleep -Seconds 2
+    }
+
+    # Trigger KMS network check-in via SoftwareLicensingProduct.Activate()
+    $product = Get-WindowsLicensingProduct -CimSession $CimSession
+    $product | Invoke-SppCimMethod -MethodName Activate
+    $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
+
+    $license = Get-LicenseStatus -CimSession $CimSession
+    if ($license.Activated)
+    {
+        Write-Verbose "The computer activated successfully. Current status: $($license.LicenseStatus)"
     }
     else
     {
-        # If provided, update values for Server FQDN and Port
-        if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
-        {
-            $Service | Invoke-CimMethod -MethodName SetKeyManagementServiceMachine -Arguments @{ MachineName = $KMSServerFQDN } | Out-Null
-        }
-        if ($PSBoundParameters.ContainsKey('KMSServerPort'))
-        {
-            $Service | Invoke-CimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $KMSServerPort } | Out-Null
-        }
-
-        $Service | Invoke-CimMethod -MethodName InstallProductKey -Arguments @{ ProductKey = $productKey } | Out-Null
-
-        Start-Sleep -Seconds 10 # Installing product key takes time.
-        $Service | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null
-        Start-Sleep -Seconds 2
-
-        # Trigger KMS network check-in via SoftwareLicensingProduct.Activate()
-        $activationQuery = 'SELECT ID, LicenseStatus, Name
-        FROM SoftwareLicensingProduct
-        WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
-        $product = Get-CimInstance -CimSession $CimSession -Query $activationQuery | Select-Object -First 1
-        $product | Invoke-CimMethod -MethodName Activate | Out-Null
-
-        # Check Windows Activation Status
-        $license = Get-LicenseStatus -CimSession $CimSession
-
-        if ($license.Activated)
-        {
-            Write-Verbose "The computer activated successfully. Current status: $($license.'License Status')"
-        }
-        else
-        {
-            throw "Activation failed. Current status: $($license.'License Status')"
-        }
+        throw "Activation failed. Current status: $($license.LicenseStatus)"
     }
 }
