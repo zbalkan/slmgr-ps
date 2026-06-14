@@ -6,14 +6,10 @@ function Get-OfflineInstallationId
         [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $query = 'SELECT ID, Name, OfflineInstallationId, PartialProductKey
-    FROM SoftwareLicensingProduct
-    WHERE (PartialProductKey <> null AND Name LIKE "Windows%")'
-
-    $product = Get-CimInstance -CimSession $CimSession -Query $query
+    $product = Get-WindowsLicensingProduct -CimSession $CimSession
 
     $result = [PSCustomObject]@{
-        'Offline Installation Id' = $product.OfflineInstallationId
+        OfflineInstallationId = $product.OfflineInstallationId
     }
     return $result
 }

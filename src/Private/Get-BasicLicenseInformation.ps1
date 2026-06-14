@@ -6,22 +6,13 @@ function Get-BasicLicenseInformation
         [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $query = 'SELECT ID,Name,Description,PartialProductKey,LicenseStatus
-    FROM SoftwareLicensingProduct
-    WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
-
-    $product = Get-CimInstance -CimSession $CimSession -Query $query
-
-    $name = $product.Name
-    $desc = $product.Description
-    $partial = $product.PartialProductKey
-    $status = [LicenseStatusCode]($product.LicenseStatus)
+    $product = Get-WindowsLicensingProduct -CimSession $CimSession
 
     $result = [PSCustomObject]@{
-        Name                  = $name
-        Description           = $desc
-        'Partial Product Key' = $partial
-        'License Status'      = $status
+        Name              = $product.Name
+        Description       = $product.Description
+        PartialProductKey = $product.PartialProductKey
+        LicenseStatus     = [LicenseStatusCode]($product.LicenseStatus)
     }
     return $result
 }

@@ -6,17 +6,12 @@ function Get-LicenseStatus
         [Microsoft.Management.Infrastructure.CimSession]$CimSession
     )
 
-    $query = 'SELECT ID, LicenseStatus, Name
-    FROM SoftwareLicensingProduct
-    WHERE LicenseStatus <> 0 AND Name LIKE "Windows%"'
-
-    $product = Get-CimInstance -CimSession $CimSession -Query $query
-
-    $status = [LicenseStatusCode]($product.LicenseStatus).LicenseStatus
+    $product = Get-WindowsLicensingProduct -CimSession $CimSession
+    $status = [LicenseStatusCode]($product.LicenseStatus)
     $activated = $status -eq [LicenseStatusCode]::Licensed
     $result = [PSCustomObject]@{
-        'License Status' = $status
-        Activated        = $activated
+        LicenseStatus = $status
+        Activated     = $activated
     }
     return $result
 }

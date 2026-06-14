@@ -7,35 +7,25 @@ function Invoke-OfflineActivation
         [CimInstance]$Service
     )
 
-    # Check Windows Activation Status
-    $status = (Get-LicenseStatus -CimSession $CimSession).LicenseStatus
-    Write-Verbose "License Status: $($status)"
-    if ($status.Activated) { Write-Warning 'The product is already activated.'; return; }
+    $licenseInfo = Get-LicenseStatus -CimSession $CimSession
+    Write-Verbose "License Status: $($licenseInfo.LicenseStatus)"
+    if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return }
 
-    $query = 'SELECT ID, Name, PartialProductKey
-    FROM SoftwareLicensingProduct
-    WHERE (PartialProductKey <> null AND Name LIKE "Windows%")'
+    $product = Get-WindowsLicensingProduct -CimSession $CimSession
 
-    Write-Verbose 'Connecting to computer...'
-    $product = Get-CimInstance -CimSession $CimSession -Query $query
+    # Accept dashes, spaces, or plain digits; strip separators before submission
+    $normalizedCid = $ConfirmationId -replace '[\s\-]', ''
+    $installationId = (Get-OfflineInstallationId -CimSession $CimSession).OfflineInstallationId
 
-    $InstallationId = (Get-OfflineInstallationId -CimSession $CimSession).'Offline Installation Id'
     Write-Verbose 'Submitting activation and confirmation IDs...'
-    Write-Debug 'Offline Installation ID: $InstallationId'
-    Write-Debug 'Confirmation ID: $ConfirmationId'
+    Write-Debug "Offline Installation ID: $installationId"
+    Write-Debug "Confirmation ID: $normalizedCid"
 
-    $arguments = @{
-        InstallationId = $InstallationId
-        ConfirmationId = $ConfirmationId
+    $product | Invoke-SppCimMethod -MethodName DepositOfflineConfirmationId -Arguments @{
+        InstallationId = $installationId
+        ConfirmationId = $normalizedCid
     }
-
-    try
-    {
-        if ($(($product | Invoke-CimMethod -MethodName DepositOfflineConfirmationId -Arguments $arguments)).ReturnValue -ne 0)
-        { throw 'Failed to activate with offline activation. Check the Confirmation ID.' }
-    }
-    catch { throw }
 
     Write-Verbose 'Updating the license status...'
-    $Service | Invoke-CimMethod -MethodName RefreshLicenseStatus
+    $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
 }
