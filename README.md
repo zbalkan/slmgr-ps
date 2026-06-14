@@ -1,6 +1,6 @@
 # slmgr-ps
 
-A PowerShell replacement for `slmgr.vbs` script.
+A PowerShell replacement for `slmgr.vbs` script (v1.0.0).
 
 Currently the features are limited to KMS and offline activation scenarios. See [Comparison](#comparison) for details.
 
@@ -18,7 +18,7 @@ This caused me being unable to use `slmgr.vbs`, `OSPP.vbs`, some SCCM features l
 
 I wrote a PowerShell script based on the `slmgr.vbs`. It's long but easy to read. You can find the old script in [my gists](https://gist.github.com/zbalkan/4ba92656a3a8387e6b220bcf8fcd5fc6).
 
-I converted this simple, one-cmdlet script to a module and published it so anyone can use it easily. Ypu can find it in the [Powershell Gallery](https://www.powershellgallery.com/packages/slmgr-ps).
+I converted this simple, one-cmdlet script to a module and published it so anyone can use it easily. You can find it in the [PowerShell Gallery](https://www.powershellgallery.com/packages/slmgr-ps).
 
 ### Comparison
 
@@ -40,7 +40,7 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 | Option | Description | `slmgr-ps` | Notes |
 | - | - | - | - |
-| \/ipk *ProductKey* | Tries to install a 5×5 product key. The product key provided by the parameter is confirmed valid and applicable to the installed operating system.<br/>If not, an error is returned.<br/>If the key is valid and applicable, the key is installed. If a key is already installed, it is silently replaced.<br/>To prevent instability in the license service, the system should be restarted or the Software Protection Service should be restarted.<br/>This operation must be run from an elevated Command Prompt window, or the Standard User Operations registry value must be set to allow unprivileged users extra access to the Software Protection Service. | Start-WindowsActivation | No need for KMS keys |
+| \/ipk *ProductKey* | Tries to install a 5×5 product key. The product key provided by the parameter is confirmed valid and applicable to the installed operating system.<br/>If not, an error is returned.<br/>If the key is valid and applicable, the key is installed. If a key is already installed, it is silently replaced.<br/>To prevent instability in the license service, the system should be restarted or the Software Protection Service should be restarted.<br/>This operation must be run from an elevated Command Prompt window, or the Standard User Operations registry value must be set to allow unprivileged users extra access to the Software Protection Service. | Start-WindowsActivation -UseKmsClientKey | Use -UseKmsClientKey to install the GVLK for the detected edition before activation |
 | /ato [*Activation ID*] | For retail editions and volume systems that have a KMS host key or a Multiple Activation Key (MAK) installed, **/ato** prompts Windows to try online activation.<br/>For systems that have a Generic Volume License Key (GVLK) installed, this prompts a KMS activation attempt. Systems that have been set to suspend automatic KMS activation attempts (**/stao**) still try KMS activation when **/ato** is run.<br/>**Note:** Starting in Windows 8 (and Windows Server 2012), the **/stao** option is deprecated. Use the **/act-type** option instead.<br/>The parameter ***Activation ID*** expands **/ato** support to identify a Windows edition installed on the computer. Specifying the ***Activation ID*** parameter isolates the effects of the option to the edition associated with that Activation ID. Run **slmgr.vbs /dlv all** to get the Activation IDs for the installed version of Windows. If you have to support other applications, see the guidance provided by that application for further instruction.<br/>KMS activation does not require elevated privileges. However, online activation does require elevation, or the Standard User Operations registry value must be set to allow unprivileged users extra access to the Software Protection Service. | Start-WindowsActivation | No need for calling /ato separately |
 | \/dli [*Activation ID* \| All] | Display license information.<br/>By default, **/dli** displays the license information for the installed active Windows edition. Specifying the ***Activation ID*** parameter displays the license information for the specified edition that is associated with that Activation ID. Specifying **All** as the parameter displays license information for all applicable installed products.<br/>This operation does not require elevated privileges. | Get-WindowsActivation | |
 | \/dlv [*Activation ID* \| All] | Display detailed license information.<br/>By default, **/dlv** displays the license information for the installed operating system. Specifying the ***Activation ID*** parameter displays the license information for the specified edition associated with that Activation ID. Specifying the **All** parameter displays license information for all applicable installed products.<br/>This operation does not require elevated privileges. | Get-WindowsActivation -Extended | |
@@ -58,7 +58,7 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 | \/rearm-sku *Application ID* | Resets the licensing status of the specified SKU. | not implemented | |
 | \/upk [*Application ID*] | This option uninstalls the product key of the current Windows edition. After a restart, the system will be in an Unlicensed state unless a new product key is installed.<br/>Optionally, you can use the ***Activation ID*** parameter to specify a different installed product.<br/>This operation must be run from an elevated Command Prompt window. | not implemented | |
 | \/dti [*Activation ID*] | Displays installation ID for offline activation. | Get-WindowsActivation -Offline | |
-| \/atp *Confirmation ID* | Activate product by using user-provided confirmation ID. | Start-WindowsActivation -Offline -ConfirmationID <confirmation ID> | |
+| \/atp *Confirmation ID* | Activate product by using user-provided confirmation ID. | Start-WindowsActivation -Offline -ConfirmationId <confirmation ID> | |
 
 #### KMS client options
 
@@ -108,9 +108,9 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 ### The design differences from `slmgr.vbs`
 
 - You can provide an array of computer names, and it is up to you how you get them. It's just PowerShell.
-- It works on PowerShell version 5.0 and above. It means PowerShell 7.0 is ok, too.
+- It works on PowerShell 5.0 and above, including PowerShell 7.x.
 - It uses WinRM for remote computers. Ensure that remote computers are accessible over WinRM.
-- It includes a list of KMS keys, so that you don't have to for most of them -not all.
+- It includes a list of KMS client setup keys (GVLKs) for most Windows editions, including Windows Server 2025.
 - It works even if you disabled WSH, therefore, `cscript` and `wscript` - it's PowerShell!
 - The code is documented and readable, so that you can improve according to your needs.
 
@@ -127,8 +127,11 @@ Install-Module slmgr-ps
 ```powershell
 Start-WindowsActivation -WhatIf
 
-# Activates the local computer
+# Activates the local computer using the product key already installed
 Start-WindowsActivation -Verbose
+
+# Installs the GVLK for the detected OS edition, then activates via KMS
+Start-WindowsActivation -UseKmsClientKey -Verbose
 
 # Activates the computer named WS01
 Start-WindowsActivation -Computer WS01
@@ -136,18 +139,18 @@ Start-WindowsActivation -Computer WS01
 # Activates the computer named WS01 using different credentials
 Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
 
-# Disabled the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
+# Disables the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
 Start-WindowsActivation -Computer WS01, WS02 -CacheEnabled $false
 
 # Activates the computer named WS01 against server.domain.net:2500
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500
 
 # ReArm the trial period. ReArming already licensed devices can break current license issues.
-# Guard clauses wil protect 99% but cannot guarantee 100%.
+# Guard clauses will protect 99% but cannot guarantee 100%.
 Start-WindowsActivation -ReArm
 
-# Used for offline -aka phone- activation
-Start-WindowsActivation -Offline -ConfirmationID <confirmation ID>
+# Used for offline (phone) activation
+Start-WindowsActivation -Offline -ConfirmationId <confirmation ID>
 ```
 
 ### `Get-WindowsActivation` cmdlet
@@ -216,6 +219,6 @@ In case of any problems, feel free to create an issue.
 
 ## Contributing
 
-The target is to be a feature complete alternative to the `slmgr.vbs` script. Therefore, any PR adding new features adding new features out of this scope until version 1.0.0 will be kept on hold. Please refer to the comparison table when developing features. Any issues and PRs about fixing the bugs are always welcome.
+The target is to be a feature-complete alternative to the `slmgr.vbs` script. Please refer to the comparison table when developing features. Any issues and PRs for bug fixes, new feature implementations, or improvements are welcome.
 
 Please refer to the [CONTRIBUTING.MD](CONTRIBUTING.MD) for PR guidelines.
