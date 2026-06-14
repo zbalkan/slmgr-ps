@@ -16,8 +16,12 @@ function Invoke-KMSActivation
     if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
     {
         $Service | Invoke-SppCimMethod -MethodName SetKeyManagementServiceMachine -Arguments @{ MachineName = $KMSServerFQDN }
+        # Always set the port when changing the FQDN: without this, a stale non-default port
+        # from a previous call would be reused, silently targeting the wrong endpoint.
+        $effectivePort = if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $KMSServerPort } else { 1688 }
+        $Service | Invoke-SppCimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $effectivePort }
     }
-    if ($PSBoundParameters.ContainsKey('KMSServerPort'))
+    elseif ($PSBoundParameters.ContainsKey('KMSServerPort'))
     {
         $Service | Invoke-SppCimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $KMSServerPort }
     }

@@ -41,13 +41,10 @@ jobs:
         shell: pwsh
         run: Test-ModuleManifest -Path ./src/slmgr-ps.psd1 | Out-Null
 
-      - name: Import module
-        shell: pwsh
-        run: Import-Module ./src/slmgr-ps.psd1 -Force
-
-      - name: Verify only public functions are exported
+      - name: Import module and verify exports
         shell: pwsh
         run: |
+          Import-Module ./src/slmgr-ps.psd1 -Force
           $module = Get-Module slmgr-ps
           $exported = $module.ExportedFunctions.Keys | Sort-Object
           $expected = @('Get-WindowsActivation', 'Start-WindowsActivation') | Sort-Object

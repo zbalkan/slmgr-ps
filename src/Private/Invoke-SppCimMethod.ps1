@@ -13,7 +13,7 @@ function Invoke-SppCimMethod
         $invokeParams = @{ MethodName = $MethodName }
         if ($PSBoundParameters.ContainsKey('Arguments')) { $invokeParams['Arguments'] = $Arguments }
 
-        $result = $InputObject | Invoke-CimMethod @invokeParams
+        $result = $InputObject | Invoke-CimMethod @invokeParams -ErrorAction Stop
 
         if ($null -ne $result -and $result.ReturnValue -ne 0)
         {

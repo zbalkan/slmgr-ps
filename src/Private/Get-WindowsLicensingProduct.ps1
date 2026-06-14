@@ -35,5 +35,5 @@ function Get-WindowsLicensingProduct
     if ($active.Count -eq 1) { return $active[0] }
 
     $summary = ($candidates | ForEach-Object { "'$($_.Name)' (status $($_.LicenseStatus))" }) -join ', '
-    throw "Multiple Windows licensing products found and none can be selected unambiguously: $summary. Use -ActivationId to target a specific product."
+    throw "Multiple Windows licensing products found and none can be selected unambiguously: $summary. Remove duplicate product registrations or contact your administrator."
 }
