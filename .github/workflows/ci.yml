@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: PSScriptAnalyzer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path ./src -Recurse -Severity Error, Warning
+          if ($results) { $results | Format-Table -AutoSize }
+          $errors = @($results | Where-Object { $_.Severity -eq 'Error' })
+          if ($errors.Count -gt 0)
+          {
+              Write-Error "PSScriptAnalyzer found $($errors.Count) error(s)"
+              exit 1
+          }
+
+  manifest:
+    name: Module manifest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate manifest
+        shell: pwsh
+        run: Test-ModuleManifest -Path ./src/slmgr-ps.psd1 | Out-Null
+
+      - name: Import module and verify exports
+        shell: pwsh
+        run: |
+          Import-Module ./src/slmgr-ps.psd1 -Force
+          $module = Get-Module slmgr-ps
+          $exported = $module.ExportedFunctions.Keys | Sort-Object
+          $expected = @('Get-WindowsActivation', 'Start-WindowsActivation') | Sort-Object
+          if (Compare-Object $exported $expected)
+          {
+              Write-Error "Exported functions do not match expected: got [$($exported -join ', ')], expected [$($expected -join ', ')]"
+              exit 1
+          }
+
+  test-ps51:
+    name: Pester (PowerShell 5.1)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester
+        shell: powershell
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name Pester -MinimumVersion 5.0 -Force -SkipPublisherCheck
+
+      - name: Run Pester tests
+        shell: powershell
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = './tests'
+          $config.Output.Verbosity = 'Detailed'
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = './test-results-ps51.xml'
+          $results = Invoke-Pester -Configuration $config
+          if ($results.FailedCount -gt 0) { exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-ps51
+          path: ./test-results-ps51.xml
+
+  test-ps7:
+    name: Pester (PowerShell 7)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name Pester -MinimumVersion 5.0 -Force -SkipPublisherCheck
+
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = './tests'
+          $config.Output.Verbosity = 'Detailed'
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = './test-results-ps7.xml'
+          $results = Invoke-Pester -Configuration $config
+          if ($results.FailedCount -gt 0) { exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-ps7
+          path: ./test-results-ps7.xml
