@@ -30,7 +30,7 @@
     Copyright         = '(c) Zafer Balkan. All rights reserved.'
 
     # Description of the functionality provided by this module
-    Description       = 'A drop in replacement for slmgr script'
+    Description       = 'A PowerShell replacement for slmgr.vbs script'
 
     # Minimum version of the Windows PowerShell engine required by this module
     # PowerShellVersion = ''

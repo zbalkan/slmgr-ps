@@ -1,6 +1,6 @@
 # slmgr-ps
 
-A PowerShell replacement for `slmgr.vbs` script (v1.1.0).
+A PowerShell replacement for `slmgr.vbs` script.
 
 Currently the features are limited to KMS and offline activation scenarios. See [Comparison](#comparison) for details.
 
