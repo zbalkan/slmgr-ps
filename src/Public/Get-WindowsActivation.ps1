@@ -27,9 +27,8 @@ https://github.com/zbalkan/slmgr-ps
 function Get-WindowsActivation
 {
     [OutputType([PSCustomObject])]
-    [CmdletBinding(SupportsShouldProcess = $true,
+    [CmdletBinding(
         PositionalBinding = $true,
-        ConfirmImpact = 'None',
         DefaultParameterSetName = 'Basic')]
     param(
         [Parameter(Mandatory = $false,
@@ -72,18 +71,17 @@ function Get-WindowsActivation
         $PreviousPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Stop'
         Write-Verbose 'ErrorActionPreference: Stop'
+        $results = [System.Collections.Generic.List[PSCustomObject]]::new()
     }
     Process
     {
-        if ($pscmdlet.ShouldProcess($Computer -join ', ', 'Collect license information'))
+        Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
+        foreach ($c in $Computer)
         {
-            $results = [System.Collections.Generic.List[PSCustomObject]]::new()
-            Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
-            foreach ($c in $Computer)
+            Write-Verbose "Creating new CimSession for computer $c"
+            $session = Get-Session -Computer $c -Credentials $Credentials
+            try
             {
-                Write-Verbose "Creating new CimSession for computer $c"
-                $session = Get-Session -Computer $c -Credentials $Credentials
-
                 switch ($PSCmdlet.ParameterSetName)
                 {
                     'Extended'
@@ -103,18 +101,20 @@ function Get-WindowsActivation
                         $result = Get-BasicLicenseInformation -CimSession $session
                     }
                 }
+                $results.Add($result)
+            }
+            finally
+            {
                 if ($null -ne $session)
                 {
                     Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
                 }
-                $results.Add($result)
             }
-
-            return $results.ToArray()
         }
-        End
-        {
-            $ErrorActionPreference = $PreviousPreference
-        }
+    }
+    End
+    {
+        $ErrorActionPreference = $PreviousPreference
+        return $results.ToArray()
     }
 }

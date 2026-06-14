@@ -6,41 +6,32 @@ function Invoke-Rearm
         [CimInstance]$Service
     )
 
-    $status = (Get-LicenseStatus -CimSession $CimSession).LicenseStatus
-    if ($status -eq [LicenseStatusCode]::Unknown)
+    $licenseInfo = Get-LicenseStatus -CimSession $CimSession
+    $status = $licenseInfo.LicenseStatus
+    if ($null -eq $status)
     {
-        throw 'License status cannot be collected. It is suggested to restart computer.'
+        throw 'License status cannot be collected. It is suggested to restart the computer.'
     }
 
     Write-Verbose "Current license status: $status"
 
-    # Any status except Unknown, Licensed and Notification
-    $rearmableStatuses = @([LicenseStatusCode]::Unlicensed,
+    # Rearm is only meaningful for grace and non-genuine states
+    $rearmableStatuses = @(
         [LicenseStatusCode]::OOBGrace,
         [LicenseStatusCode]::OOTGrace,
         [LicenseStatusCode]::NonGenuineGrace,
-        [LicenseStatusCode]::ExtendedGrace)
+        [LicenseStatusCode]::ExtendedGrace
+    )
     $isRearmable = $status -in $rearmableStatuses
     Write-Verbose "Is rearmable: $isRearmable"
 
-    if ($isRearmable -eq $false)
+    if (-not $isRearmable)
     {
-        Write-Verbose 'No need to rearm.'
+        Write-Warning "Rearm is not applicable for the current license status: $status"
         return
     }
 
-    try
-    {
-        if ($($Service | Invoke-CimMethod -MethodName ReArmWindows).ReturnValue -ne 0)
-        {
-            throw 'Failed to rearm Windows.'
-        }
-        $Service | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null
-        Write-Verbose 'Command completed successfully.'
-        Write-Verbose 'Please restart the system for the changes to take effect.'
-    }
-    catch
-    {
-        throw
-    }
+    $Service | Invoke-SppCimMethod -MethodName ReArmWindows
+    $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
+    Write-Verbose 'Rearm completed. Please restart the system for the changes to take effect.'
 }
