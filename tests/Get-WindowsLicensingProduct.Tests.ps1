@@ -1,6 +1,7 @@
 BeforeAll {
     . $PSScriptRoot/../src/Private/LicenseStatusCode.ps1
     . $PSScriptRoot/../src/Private/Get-WindowsLicensingProduct.ps1
+    $script:MockCimSession = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
 }
 
 Describe 'Get-WindowsLicensingProduct' {
@@ -17,7 +18,7 @@ Describe 'Get-WindowsLicensingProduct' {
         }
 
         It 'Returns the single product' {
-            $result = Get-WindowsLicensingProduct -CimSession $null
+            $result = Get-WindowsLicensingProduct -CimSession $script:MockCimSession
             $result.Name | Should -Be 'Windows 11 Pro'
         }
     }
@@ -28,7 +29,7 @@ Describe 'Get-WindowsLicensingProduct' {
         }
 
         It 'Throws with descriptive message' {
-            { Get-WindowsLicensingProduct -CimSession $null } |
+            { Get-WindowsLicensingProduct -CimSession $script:MockCimSession } |
                 Should -Throw -ExpectedMessage '*No Windows licensing product*'
         }
     }
@@ -44,7 +45,7 @@ Describe 'Get-WindowsLicensingProduct' {
         }
 
         It 'Returns the Licensed product' {
-            $result = Get-WindowsLicensingProduct -CimSession $null
+            $result = Get-WindowsLicensingProduct -CimSession $script:MockCimSession
             $result.Name | Should -Be 'Windows 11 Pro'
         }
     }
@@ -60,7 +61,7 @@ Describe 'Get-WindowsLicensingProduct' {
         }
 
         It 'Returns the active product' {
-            $result = Get-WindowsLicensingProduct -CimSession $null
+            $result = Get-WindowsLicensingProduct -CimSession $script:MockCimSession
             $result.Name | Should -Be 'Windows 11 Pro'
         }
     }
@@ -76,12 +77,12 @@ Describe 'Get-WindowsLicensingProduct' {
         }
 
         It 'Throws with candidate list' {
-            { Get-WindowsLicensingProduct -CimSession $null } |
+            { Get-WindowsLicensingProduct -CimSession $script:MockCimSession } |
                 Should -Throw -ExpectedMessage '*Multiple Windows licensing products*'
         }
 
         It 'Includes product names in the error' {
-            { Get-WindowsLicensingProduct -CimSession $null } |
+            { Get-WindowsLicensingProduct -CimSession $script:MockCimSession } |
                 Should -Throw -ExpectedMessage '*Windows 10 Pro*'
         }
     }
