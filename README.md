@@ -1,6 +1,6 @@
 # slmgr-ps
 
-A PowerShell replacement for `slmgr.vbs` script (v1.0.0).
+A PowerShell replacement for `slmgr.vbs` script.
 
 Currently the features are limited to KMS and offline activation scenarios. See [Comparison](#comparison) for details.
 
@@ -50,13 +50,13 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 | Option | Description | `slmgr-ps` | Notes |
 | - | - | - | - |
-| \/cpky | Some servicing operations require the product key to be available in the registry during Out-of-Box Experience (OOBE) operations. The **/cpky** option removes the product key from the registry to prevent this key from being stolen by malicious code.<br/>For retail installations that deploy keys, best practices recommend running this option. This option is not required for MAK and KMS host keys, because this is the default behavior for those keys. This option is required only for other types of keys whose default behavior is not to clear the key from the registry.<br/>This operation must be run in an elevated Command Prompt window. | not implemented | |
+| \/cpky | Some servicing operations require the product key to be available in the registry during Out-of-Box Experience (OOBE) operations. The **/cpky** option removes the product key from the registry to prevent this key from being stolen by malicious code.<br/>For retail installations that deploy keys, best practices recommend running this option. This option is not required for MAK and KMS host keys, because this is the default behavior for those keys. This option is required only for other types of keys whose default behavior is not to clear the key from the registry.<br/>This operation must be run in an elevated Command Prompt window. | Reset-WindowsActivation -ClearProductKeyFromRegistry | |
 | \/ilc *license_file* | This option installs the license file specified by the required parameter. These licenses may be installed as a troubleshooting measure, to support token-based activation, or as part of a manual installation of an on-boarded application.<br/>Licenses are not validated during this process: License validation is out of scope for Slmgr.vbs. Instead, validation is handled by the Software Protection Service at runtime.<br/>This operation must be run from an elevated Command Prompt window, or the **Standard User Operations** registry value must be set to allow unprivileged users extra access to the Software Protection Service. | not implemented | |
 | \/rilc | This option reinstalls all licenses stored in %SystemRoot%\system32\oem and %SystemRoot%\System32\spp\tokens. These are "known-good" copies that were stored during installation.<br/>Any matching licenses in the Trusted Store are replaced. Any additional licenses&mdash;for example, Trusted Authority (TA) Issuance Licenses (ILs), licenses for applications&mdash;are not affected.<br/>This operation must be run in an elevated Command Prompt window, or the **Standard User Operations** registry value must be set to allow unprivileged users extra access to the Software Protection Service. | not implemented | |
 | \/rearm | This option resets the activation timers. The **/rearm** process is also called by **sysprep /generalize**.<br/>This operation does nothing if the **HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\SkipRearm** registry entry is set to **1**. See [Registry Settings for Volume Activation](/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/dn502532(v=ws.11)) for details about this registry entry.<br/>This operation must be run in an elevated Command Prompt window, or the **Standard User Operations** registry value must be set to allow unprivileged users extra access to the Software Protection Service. | Start-WindowsActivation -Rearm | |
 | \/rearm-app *Application ID* | Resets the licensing status of the specified app. | not implemented | |
 | \/rearm-sku *Application ID* | Resets the licensing status of the specified SKU. | not implemented | |
-| \/upk [*Application ID*] | This option uninstalls the product key of the current Windows edition. After a restart, the system will be in an Unlicensed state unless a new product key is installed.<br/>Optionally, you can use the ***Activation ID*** parameter to specify a different installed product.<br/>This operation must be run from an elevated Command Prompt window. | not implemented | |
+| \/upk [*Application ID*] | This option uninstalls the product key of the current Windows edition. After a restart, the system will be in an Unlicensed state unless a new product key is installed.<br/>Optionally, you can use the ***Activation ID*** parameter to specify a different installed product.<br/>This operation must be run from an elevated Command Prompt window. | Reset-WindowsActivation -UninstallProductKey | |
 | \/dti [*Activation ID*] | Displays installation ID for offline activation. | Get-WindowsActivation -Offline | |
 | \/atp *Confirmation ID* | Activate product by using user-provided confirmation ID. | Start-WindowsActivation -Offline -ConfirmationId <confirmation ID> | |
 
@@ -64,11 +64,11 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 | Option | Description | `slmgr-ps` | Notes |
 | - | - | - | - |
-| \/skms *Name[:Port] \| \: port* [*Activation ID*] | This option specifies the name and, optionally, the port of the KMS host computer to contact. Setting this value disables auto-detection of the KMS host.<br/>If the KMS host uses Internet Protocol version 6 (IPv6) only, the address must be specified in the format *hostname*:*port*. IPv6 addresses contain colonsV, which the Slmgr.vbs script does not parse correctly.<br/>This operation must be run in an elevated Command Prompt window. | Start-WindowsActivation -KMSServerFQDN activationservername -KMSServerPort port | |
+| \/skms *Name[:Port] \| \: port* [*Activation ID*] | This option specifies the name and, optionally, the port of the KMS host computer to contact. Setting this value disables auto-detection of the KMS host.<br/>If the KMS host uses Internet Protocol version 6 (IPv6) only, the address must be specified in the format *hostname*:*port*. IPv6 addresses contain colons, which the Slmgr.vbs script does not parse correctly.<br/>This operation must be run in an elevated Command Prompt window. | Start-WindowsActivation -KMSServerFQDN activationservername -KMSServerPort port | |
 | \/skms-domain *FQDN* [*Activation ID*] | Sets the specific DNS domain in which all KMS SRV records can be found. This setting has no effect if the specific single KMS host is set by using the **/skms** option. Use this option, especially in disjoint namespace environments, to force KMS to ignore the DNS suffix search list and look for KMS host records in the specified DNS domain instead. | not implemented | |
-| \/ckms [*Activation ID*] | This option removes the specified KMS host name, address, and port information from the registry and restores KMS auto-discovery behavior.<br/>This operation must be run in an elevated Command Prompt window. | not implemented | |
-| \/skhc | This option enables KMS host caching (default). After the client discovers a working KMS host, this setting prevents the Domain Name System (DNS) priority and weight from affecting further communication with the host. If the system can no longer contact the working KMS host, the client tries to discover a new host.<br/>This operation must be run in an elevated Command Prompt window. | Start-WindowsActivation -CacheEnabled $true | KMS cache is enabled by default |
-| \/ckhc | This option disables KMS host caching. This setting instructs the client to use DNS auto-discovery each time it tries KMS activation (recommended when using priority and weight).<br/>This operation must be run in an elevated Command Prompt window. | Start-WindowsActivation -CacheEnabled $false | |
+| \/ckms [*Activation ID*] | This option removes the specified KMS host name, address, and port information from the registry and restores KMS auto-discovery behavior.<br/>This operation must be run in an elevated Command Prompt window. | Reset-WindowsActivation -ClearKMSSettings | |
+| \/skhc | This option enables KMS host caching (default). After the client discovers a working KMS host, this setting prevents the Domain Name System (DNS) priority and weight from affecting further communication with the host. If the system can no longer contact the working KMS host, the client tries to discover a new host.<br/>This operation must be run in an elevated Command Prompt window. | not implemented | KMS cache is enabled by default |
+| \/ckhc | This option disables KMS host caching. This setting instructs the client to use DNS auto-discovery each time it tries KMS activation (recommended when using priority and weight).<br/>This operation must be run in an elevated Command Prompt window. | Start-WindowsActivation -CacheDisabled | |
 
 #### KMS host configuration options
 
@@ -140,7 +140,7 @@ Start-WindowsActivation -Computer WS01
 Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
 
 # Disables the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
-Start-WindowsActivation -Computer WS01, WS02 -CacheEnabled $false
+Start-WindowsActivation -Computer WS01, WS02 -CacheDisabled
 
 # Activates the computer named WS01 against server.domain.net:2500
 Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500
@@ -173,6 +173,25 @@ Get-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
 
 # Get the offline installation ID for offline -aka phone- activation
 Get-WindowsActivation -Offline
+```
+
+### `Reset-WindowsActivation` cmdlet
+
+```powershell
+# Uninstall the product key (slmgr /upk)
+Reset-WindowsActivation -UninstallProductKey
+
+# Clear the product key from the registry (slmgr /cpky)
+Reset-WindowsActivation -ClearProductKeyFromRegistry
+
+# Clear KMS settings and restore auto-discovery (slmgr /ckms)
+Reset-WindowsActivation -ClearKMSSettings
+
+# Combine multiple operations in a single call
+Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry -ClearKMSSettings
+
+# Reset activation settings on a remote computer
+Reset-WindowsActivation -Computer WS01 -Credentials (Get-Credential) -UninstallProductKey -ClearProductKeyFromRegistry
 ```
 
 ### Advanced usage
