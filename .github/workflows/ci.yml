@@ -47,7 +47,7 @@ jobs:
           Import-Module ./src/slmgr-ps.psd1 -Force
           $module = Get-Module slmgr-ps
           $exported = $module.ExportedFunctions.Keys | Sort-Object
-          $expected = @('Get-WindowsActivation', 'Start-WindowsActivation') | Sort-Object
+          $expected = @('Get-WindowsActivation', 'Reset-WindowsActivation', 'Start-WindowsActivation') | Sort-Object
           if (Compare-Object $exported $expected)
           {
               Write-Error "Exported functions do not match expected: got [$($exported -join ', ')], expected [$($expected -join ', ')]"

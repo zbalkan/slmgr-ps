@@ -12,7 +12,7 @@
     RootModule        = 'slmgr-ps.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.0.0'
+    ModuleVersion     = '1.1.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -30,7 +30,7 @@
     Copyright         = '(c) Zafer Balkan. All rights reserved.'
 
     # Description of the functionality provided by this module
-    Description       = 'A drop in replacement for slmgr script'
+    Description       = 'A PowerShell replacement for slmgr.vbs script'
 
     # Minimum version of the Windows PowerShell engine required by this module
     # PowerShellVersion = ''
@@ -69,7 +69,7 @@
     # NestedModules = @()
 
     # Functions to export from this module
-    FunctionsToExport = @('Get-WindowsActivation', 'Start-WindowsActivation')
+    FunctionsToExport = @('Get-WindowsActivation', 'Reset-WindowsActivation', 'Start-WindowsActivation')
 
     # Cmdlets to export from this module
     CmdletsToExport   = @()
