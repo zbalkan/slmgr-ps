@@ -1,243 +1,313 @@
 # slmgr-ps
 
-A PowerShell replacement for `slmgr.vbs` script.
+A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
-Currently the features are limited to KMS and offline activation scenarios. See [Comparison](#comparison) for details.
+`slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially KMS activation, basic licensing status, offline activation, rearm, product-key removal, product-key registry cleanup, and partial KMS client reset workflows.
 
 ## About this module
 
-One of my hardening guideline is getting rid of VBscript in every environment.
+One of my hardening guidelines is to remove VBScript execution from managed Windows environments where possible.
 
 - I disabled [Windows Script Host](https://blog.f-secure.com/how-to-disable-windows-script-host/), blocking `cscript` and `wscript`.
-![alt text](images/blocked.png "Blocked WSH")
 
-- I changed the file-type association of `.vbs` to be opened with Notepad, and cannot be executed.
-![alt text](images/notepad.png ".vbs extension is not an executable.")
+![Blocked WSH](images/blocked.png "Blocked WSH")
 
-This caused me being unable to use `slmgr.vbs`, `OSPP.vbs`, some SCCM features like MDT. I started with `slmgr.vbs` as it was more important for me; I was migrating Windows 7 devices to Windows 10!
+- I changed the file-type association of `.vbs` so `.vbs` files open in Notepad instead of executing.
 
-I wrote a PowerShell script based on the `slmgr.vbs`. It's long but easy to read. You can find the old script in [my gists](https://gist.github.com/zbalkan/4ba92656a3a8387e6b220bcf8fcd5fc6).
+![.vbs extension is not an executable](images/notepad.png ".vbs extension is not an executable.")
 
-I converted this simple, one-cmdlet script to a module and published it so anyone can use it easily. You can find it in the [PowerShell Gallery](https://www.powershellgallery.com/packages/slmgr-ps).
+That also meant I could no longer use tools such as `slmgr.vbs`, `OSPP.vbs`, and some SCCM/MDT-related scripts in the same way. I started with `slmgr.vbs` because I needed it during a Windows 7 to Windows 10 migration.
 
-### Comparison
+The original version was a small PowerShell script based on `slmgr.vbs`. You can still find the old script in [my gist](https://gist.github.com/zbalkan/4ba92656a3a8387e6b220bcf8fcd5fc6).
 
-The following tables are copied from [Microsoft Docs](https://learn.microsoft.com/en-us/windows-server/get-started/activation-slmgr-vbs-options) regarding `slmgr.vbs`.
+This repository turns that script into a PowerShell module so it can be installed and used more easily. You can find it in the [PowerShell Gallery](https://www.powershellgallery.com/packages/slmgr-ps).
 
-```cmd
-slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
-```
+## Current scope
 
-#### General Slmgr.vbs options
+The module currently exports three public functions:
 
-| Option | Description | `slmgr-ps` | Notes |
-| - | - | - | - |
-| [*ComputerName*] | Name of a remote computer (default is local computer) | -Computer | |
-| [*User*] | Account that has the required privilege on the remote computer | -Credentials | The command uses the current user's credentials. User can pass a credential object.<br/>Reference: CWE-214: Invocation of Process Using Visible Sensitive Information |
-| [*Password*] | Password for the account that has the required privileges on the remote computer | -Credentials | The command uses the current user's credentials. User can pass a credential object.<br/>Reference: CWE-214: Invocation of Process Using Visible Sensitive Information |
+- `Get-WindowsActivation`
+- `Start-WindowsActivation`
+- `Reset-WindowsActivation`
 
-#### Global options
+The current implementation is intentionally narrower than `slmgr.vbs`. It supports the default Windows licensing product selected by the module. It does not currently support `slmgr.vbs` activation ID targeting, `all` product enumeration, token-based activation, Active Directory-based activation, or KMS host configuration.
 
-| Option | Description | `slmgr-ps` | Notes |
-| - | - | - | - |
-| \/ipk *ProductKey* | Tries to install a 5×5 product key. The product key provided by the parameter is confirmed valid and applicable to the installed operating system.<br/>If not, an error is returned.<br/>If the key is valid and applicable, the key is installed. If a key is already installed, it is silently replaced.<br/>To prevent instability in the license service, the system should be restarted or the Software Protection Service should be restarted.<br/>This operation must be run from an elevated Command Prompt window, or the Standard User Operations registry value must be set to allow unprivileged users extra access to the Software Protection Service. | Start-WindowsActivation -UseKmsClientKey | Use -UseKmsClientKey to install the GVLK for the detected edition before activation |
-| /ato [*Activation ID*] | For retail editions and volume systems that have a KMS host key or a Multiple Activation Key (MAK) installed, **/ato** prompts Windows to try online activation.<br/>For systems that have a Generic Volume License Key (GVLK) installed, this prompts a KMS activation attempt. Systems that have been set to suspend automatic KMS activation attempts (**/stao**) still try KMS activation when **/ato** is run.<br/>**Note:** Starting in Windows 8 (and Windows Server 2012), the **/stao** option is deprecated. Use the **/act-type** option instead.<br/>The parameter ***Activation ID*** expands **/ato** support to identify a Windows edition installed on the computer. Specifying the ***Activation ID*** parameter isolates the effects of the option to the edition associated with that Activation ID. Run **slmgr.vbs /dlv all** to get the Activation IDs for the installed version of Windows. If you have to support other applications, see the guidance provided by that application for further instruction.<br/>KMS activation does not require elevated privileges. However, online activation does require elevation, or the Standard User Operations registry value must be set to allow unprivileged users extra access to the Software Protection Service. | Start-WindowsActivation | No need for calling /ato separately |
-| \/dli [*Activation ID* \| All] | Display license information.<br/>By default, **/dli** displays the license information for the installed active Windows edition. Specifying the ***Activation ID*** parameter displays the license information for the specified edition that is associated with that Activation ID. Specifying **All** as the parameter displays license information for all applicable installed products.<br/>This operation does not require elevated privileges. | Get-WindowsActivation | |
-| \/dlv [*Activation ID* \| All] | Display detailed license information.<br/>By default, **/dlv** displays the license information for the installed operating system. Specifying the ***Activation ID*** parameter displays the license information for the specified edition associated with that Activation ID. Specifying the **All** parameter displays license information for all applicable installed products.<br/>This operation does not require elevated privileges. | Get-WindowsActivation -Extended | |
-| \/xpr [*Activation ID*] | Display the activation expiration date for the product. By default, this refers to the current Windows edition and is primarily useful for KMS clients, because MAK and retail activation is perpetual.<br/>Specifying the ***Activation ID*** parameter displays the activation expiration date of the specified edition that is associated with that Activation ID.This operation does not require elevated privileges. | Get-WindowsActivation -Expiry | |
-
-#### Advanced options
-
-| Option | Description | `slmgr-ps` | Notes |
-| - | - | - | - |
-| \/cpky | Some servicing operations require the product key to be available in the registry during Out-of-Box Experience (OOBE) operations. The **/cpky** option removes the product key from the registry to prevent this key from being stolen by malicious code.<br/>For retail installations that deploy keys, best practices recommend running this option. This option is not required for MAK and KMS host keys, because this is the default behavior for those keys. This option is required only for other types of keys whose default behavior is not to clear the key from the registry.<br/>This operation must be run in an elevated Command Prompt window. | Reset-WindowsActivation -ClearProductKeyFromRegistry | |
-| \/ilc *license_file* | This option installs the license file specified by the required parameter. These licenses may be installed as a troubleshooting measure, to support token-based activation, or as part of a manual installation of an on-boarded application.<br/>Licenses are not validated during this process: License validation is out of scope for Slmgr.vbs. Instead, validation is handled by the Software Protection Service at runtime.<br/>This operation must be run from an elevated Command Prompt window, or the **Standard User Operations** registry value must be set to allow unprivileged users extra access to the Software Protection Service. | not implemented | |
-| \/rilc | This option reinstalls all licenses stored in %SystemRoot%\system32\oem and %SystemRoot%\System32\spp\tokens. These are "known-good" copies that were stored during installation.<br/>Any matching licenses in the Trusted Store are replaced. Any additional licenses&mdash;for example, Trusted Authority (TA) Issuance Licenses (ILs), licenses for applications&mdash;are not affected.<br/>This operation must be run in an elevated Command Prompt window, or the **Standard User Operations** registry value must be set to allow unprivileged users extra access to the Software Protection Service. | not implemented | |
-| \/rearm | This option resets the activation timers. The **/rearm** process is also called by **sysprep /generalize**.<br/>This operation does nothing if the **HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\SkipRearm** registry entry is set to **1**. See [Registry Settings for Volume Activation](/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/dn502532(v=ws.11)) for details about this registry entry.<br/>This operation must be run in an elevated Command Prompt window, or the **Standard User Operations** registry value must be set to allow unprivileged users extra access to the Software Protection Service. | Start-WindowsActivation -Rearm | |
-| \/rearm-app *Application ID* | Resets the licensing status of the specified app. | not implemented | |
-| \/rearm-sku *Application ID* | Resets the licensing status of the specified SKU. | not implemented | |
-| \/upk [*Application ID*] | This option uninstalls the product key of the current Windows edition. After a restart, the system will be in an Unlicensed state unless a new product key is installed.<br/>Optionally, you can use the ***Activation ID*** parameter to specify a different installed product.<br/>This operation must be run from an elevated Command Prompt window. | Reset-WindowsActivation -UninstallProductKey | |
-| \/dti [*Activation ID*] | Displays installation ID for offline activation. | Get-WindowsActivation -Offline | |
-| \/atp *Confirmation ID* | Activate product by using user-provided confirmation ID. | Start-WindowsActivation -Offline -ConfirmationId <confirmation ID> | |
-
-#### KMS client options
-
-| Option | Description | `slmgr-ps` | Notes |
-| - | - | - | - |
-| \/skms *Name[:Port] \| \: port* [*Activation ID*] | This option specifies the name and, optionally, the port of the KMS host computer to contact. Setting this value disables auto-detection of the KMS host.<br/>If the KMS host uses Internet Protocol version 6 (IPv6) only, the address must be specified in the format *hostname*:*port*. IPv6 addresses contain colons, which the Slmgr.vbs script does not parse correctly.<br/>This operation must be run in an elevated Command Prompt window. | Start-WindowsActivation -KMSServerFQDN activationservername -KMSServerPort port | |
-| \/skms-domain *FQDN* [*Activation ID*] | Sets the specific DNS domain in which all KMS SRV records can be found. This setting has no effect if the specific single KMS host is set by using the **/skms** option. Use this option, especially in disjoint namespace environments, to force KMS to ignore the DNS suffix search list and look for KMS host records in the specified DNS domain instead. | not implemented | |
-| \/ckms [*Activation ID*] | This option removes the specified KMS host name, address, and port information from the registry and restores KMS auto-discovery behavior.<br/>This operation must be run in an elevated Command Prompt window. | Reset-WindowsActivation -ClearKMSSettings | |
-| \/skhc | This option enables KMS host caching (default). After the client discovers a working KMS host, this setting prevents the Domain Name System (DNS) priority and weight from affecting further communication with the host. If the system can no longer contact the working KMS host, the client tries to discover a new host.<br/>This operation must be run in an elevated Command Prompt window. | not implemented | KMS cache is enabled by default |
-| \/ckhc | This option disables KMS host caching. This setting instructs the client to use DNS auto-discovery each time it tries KMS activation (recommended when using priority and weight).<br/>This operation must be run in an elevated Command Prompt window. | Start-WindowsActivation -CacheDisabled | |
-
-#### KMS host configuration options
-
-| Option | Description | `slmgr-ps` | Notes |
-| - | - | - | - |
-| \/sai *Interval* | This option sets the interval in minutes for unactivated clients to try to connect to KMS. The activation interval must be between 15 minutes and 30 days, although the default value (two hours) is recommended.<br/>The KMS client initially picks up this interval from registry but switches to the KMS setting after it receives the first KMS response.<br/>This operation must be run in an elevated Command Prompt window. | not implemented | |
-| \/sri *Interval* | This option sets the renewal interval in minutes for activated clients to try to connect to KMS. The renewal interval must be between 15 minutes and 30 days. This option is set initially on both the KMS server and client sides. The default value is 10,080 minutes (7 days).<br/>The KMS client initially picks up this interval from the registry but switches to the KMS setting after it receives the first KMS response.<br/>This operation must be run in an elevated Command Prompt window. | not implemented | |
-| \/sprt *Port* | This option sets the port on which the KMS host listens for client activation requests. The default TCP port is 1688.<br/>This operation must be run from an elevated Command Prompt window. | not implemented | |
-| \/sdns | Enable DNS publishing by the KMS host (default).<br/>This operation must be run in an elevated Command Prompt window. | not implemented | |
-| \/cdns | Disable DNS publishing by the KMS host.<br/>This operation must be run in an elevated Command Prompt window. | not implemented | |
-| \/spri | Set the KMS priority to normal (default).<br/>This operation must be run in an elevated Command Prompt window. | not implemented | |
-| \/cpri | Set the KMS priority to low.<br/>Use this option to minimize contention from KMS in a co-hosted environment. Note that this could cause KMS starvation, depending on what other applications or server roles are active. Use with care.<br/>This operation must be run in an elevated Command Prompt window. | not implemented | |
-| \/act-type [*Activation-Type*] [*Activation ID*] | This option sets a value in the registry that limits volume activation to a single type. Activation Type **1** limits activation to Active Directory only; **2** limits it to KMS activation; **3** to token-based activation. The **0** option allows any activation type and is the default value. | not implemented | |
-
-#### Token-based activation configuration options
-
-| Option | Description | `slmgr-ps` | Notes |
-| - | - | - | - |
-| /lil | List the installed token-based activation issuance licenses. | not implemented | |
-| \/ril *ILID* *ILvID* | Remove an installed token-based activation issuance license.<br/>This operation must be run from an elevated Command Prompt window. | not implemented | |
-| \/stao | Set the **Token-based Activation Only** flag, disabling automatic KMS activation.<br/>This operation must be run in an elevated Command Prompt window.<br/>This option was removed in Windows Server 2012 R2 and Windows 8.1. Use the **/act–type** option instead. | not implemented | |
-| \/ctao | Clear the **Token-based Activation Only** flag (default), enabling automatic KMS activation.<br/>This operation must be run in an elevated Command Prompt window.<br/>This option was removed in Windows Server 2012 R2 and Windows 8.1. Use the **/act–type**</strong> option instead. | not implemented | |
-| \/ltc | List valid token-based activation certificates that can activate installed software. | not implemented | |
-| \/fta *Certificate Thumbprint* [*PIN*] | Force token-based activation by using the identified certificate. The optional personal identification number (PIN) is provided to unlock the private key without a PIN prompt if you use certificates that are protected by hardware (for example, smart cards). | not implemented | |
-
-#### Active Directory-based activation configuration options
-
-| Option | Description | `slmgr-ps` | Notes |
-| - | - | - | - |
-| \/ad-activation-online *Product Key* [*Activation Object name*] | Collects Active Directory data and starts Active Directory forest activation using the credentials that the command prompt is running. Local administrator access is not required. However, Read/Write access to the activation object container in the root domain of the forest is required. | not implemented | |
-| \/ad-activation-get-IID *Product Key* | This option starts Active Directory forest activation in phone mode. The output is the installation ID (IID) that can be used to activate the forest over the telephone if internet connectivity is not available. Upon providing the IID in the activation phone call, a CID is returned that is used to complete activation. | not implemented | |
-| \/ad-activation-apply-cid *Product Key* *Confirmation ID* [*Activation Object name>] | When you use this option, enter the CID that was provided in the activation telephone call to complete activation | not implemented | |
-| [/name: *AO_Name*] | Optionally, you can append the **/name** option to any of these commands to specify a name for the activation object stored in Active Directory. The name must not exceed 40 Unicode characters. Use double quotation marks to explicitly define the name string.<br/>In Windows Server 2012 R2 and Windows 8.1, you can append the name directly after **/ad-activation-online *Product Key*** and **/ad-activation-apply-cid** without having to use the **/name** option. | not implemented | |
-| \/ao-list | Displays all of the activation objects that are available to the local computer. | not implemented | |
-| \/del-ao *AO_DN*<br/>\/del-ao *AO_RDN* | Deletes the specified activation object from the forest. | not implemented | |
-
-### The design differences from `slmgr.vbs`
-
-- You can provide an array of computer names, and it is up to you how you get them. It's just PowerShell.
-- It works on PowerShell 5.0 and above, including PowerShell 7.x.
-- It uses WinRM for remote computers. Ensure that remote computers are accessible over WinRM.
-- It includes a list of KMS client setup keys (GVLKs) for most Windows editions, including Windows Server 2025.
-- It works even if you disabled WSH, therefore, `cscript` and `wscript` - it's PowerShell!
-- The code is documented and readable, so that you can improve according to your needs.
-
-## Usage
-
-### Installation
+## Installation
 
 ```powershell
 Install-Module slmgr-ps
 ```
 
-### `Start-WindowsActivation` cmdlet
+## Basic usage
+
+### Get Windows activation information
 
 ```powershell
-Start-WindowsActivation -WhatIf
-
-# Activates the local computer using the product key already installed
-Start-WindowsActivation -Verbose
-
-# Installs the GVLK for the detected OS edition, then activates via KMS
-Start-WindowsActivation -UseKmsClientKey -Verbose
-
-# Activates the computer named WS01
-Start-WindowsActivation -Computer WS01
-
-# Activates the computer named WS01 using different credentials
-Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
-
-# Disables the KMS cache for the computers named WS01 and WS02. Cache is enabled by default.
-Start-WindowsActivation -Computer WS01, WS02 -CacheDisabled
-
-# Activates the computer named WS01 against server.domain.net:2500
-Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500
-
-# ReArm the trial period. ReArming already licensed devices can break current license issues.
-# Guard clauses will protect 99% but cannot guarantee 100%.
-Start-WindowsActivation -ReArm
-
-# Used for offline (phone) activation
-Start-WindowsActivation -Offline -ConfirmationId <confirmation ID>
-```
-
-### `Get-WindowsActivation` cmdlet
-
-```powershell
-# Collects basic license information of local computer, equal to slmgr.vbs /dli
+# Basic license information, similar to slmgr.vbs /dli for the selected Windows product
 Get-WindowsActivation
 
-# Collects extended license information of local computer, equal to slmgr.vbs /dlv
+# Extended license information, similar to slmgr.vbs /dlv for the selected Windows product
 Get-WindowsActivation -Extended
 
-# Collects license expiration information of local computer, equal to slmgr.vbs /xpr
+# Expiration information, similar to slmgr.vbs /xpr for the selected Windows product
 Get-WindowsActivation -Expiry
 
-# Collects basic license information of computer WS01 over WinRM
-Get-WindowsActivation -Computer WS01
-
-# Collects basic license information of computer WS01 over WinRM using different credentials
-Get-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
-
-# Get the offline installation ID for offline -aka phone- activation
+# Offline installation ID, similar to slmgr.vbs /dti for the selected Windows product
 Get-WindowsActivation -Offline
 ```
 
-### `Reset-WindowsActivation` cmdlet
+### Work with remote computers
 
 ```powershell
-# Uninstall the product key (slmgr /upk)
+# Basic license information from a remote computer
+Get-WindowsActivation -Computer WS01
+
+# Use explicit credentials
+Get-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
+
+# Query multiple computers
+Get-WindowsActivation -Computer WS01, WS02, WS03
+```
+
+Remote operations use PowerShell CIM sessions. Local sessions use DCOM; remote sessions use WinRM. Ensure WinRM is enabled and reachable for remote computers.
+
+### Activate Windows
+
+```powershell
+# Activate the selected Windows product using the currently installed key
+Start-WindowsActivation -Verbose
+
+# Install the detected KMS client setup key (GVLK), then activate
+Start-WindowsActivation -UseKmsClientKey -Verbose
+
+# Activate a remote computer
+Start-WindowsActivation -Computer WS01
+
+# Activate a remote computer using explicit credentials
+Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
+
+# Set a KMS server and port before activation
+Start-WindowsActivation -Computer WS01 -KMSServerFQDN kms.example.com -KMSServerPort 1688
+
+# Disable KMS host caching before activation
+Start-WindowsActivation -Computer WS01 -CacheDisabled
+```
+
+`-UseKmsClientKey` is not a general replacement for `slmgr.vbs /ipk <ProductKey>`. It installs a known KMS client setup key for the detected Windows edition, then attempts activation. This is useful when switching a supported Windows edition to KMS activation, but it does not let you pass an arbitrary product key.
+
+### Offline activation
+
+```powershell
+# Get the offline installation ID
+Get-WindowsActivation -Offline
+
+# Apply a confirmation ID returned by phone activation
+Start-WindowsActivation -Offline -ConfirmationId 123456-123456-123456-123456-123456-123456-123456-123456-123456
+```
+
+The confirmation ID may contain dashes or spaces. The module normalizes it before submitting it.
+
+### Rearm
+
+```powershell
+Start-WindowsActivation -Rearm
+```
+
+Rearm is a material licensing operation. Run it only when you understand the activation state and the effect on the target system.
+
+### Reset activation-related settings
+
+```powershell
+# Uninstall the product key from the selected Windows product
 Reset-WindowsActivation -UninstallProductKey
 
-# Clear the product key from the registry (slmgr /cpky)
+# Clear the product key from registry storage
 Reset-WindowsActivation -ClearProductKeyFromRegistry
 
-# Clear KMS settings and restore auto-discovery (slmgr /ckms)
+# Clear the configured KMS host name
 Reset-WindowsActivation -ClearKMSSettings
 
-# Combine multiple operations in a single call
+# Combine operations
 Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry -ClearKMSSettings
 
-# Reset activation settings on a remote computer
+# Run against a remote computer
 Reset-WindowsActivation -Computer WS01 -Credentials (Get-Credential) -UninstallProductKey -ClearProductKeyFromRegistry
 ```
 
-### Advanced usage
+`-ClearKMSSettings` currently clears the configured KMS host name. It should not be described as full `/ckms` parity until KMS port clearing and activation-ID-specific KMS clearing are implemented and tested.
 
-This module allows users to activate computers remotely as well as reporting.
+## Comparison with slmgr.vbs
 
-```powershell
-$computers = @('WS01', 'WS02', 'WS03')
+The following table compares the current `slmgr-ps` implementation with documented `slmgr.vbs` options.
 
-# Iterate over the list and activate
-Start-WindowsActivation -Computer $computers -Verbose
+Microsoft documentation: [Slmgr.vbs options for obtaining volume activation information](https://learn.microsoft.com/en-us/windows-server/get-started/activation-slmgr-vbs-options)
 
+### General command shape
 
-# Generate a report of activation status
-$report = $computers | ForEach-Object {
-    $status = Get-WindowsActivation -Computer $_
-    [PSCustomObject]@{
-        Computer = $_
-        Status = $status.LicenseStatus
-    }
-}
-$report | Format-Table -AutoSize
+```cmd
+slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 ```
 
-## Securing WinRM Communication
+| `slmgr.vbs` capability   | `slmgr-ps` equivalent           |                Status | Notes                                                                             |
+| ------------------------ | ------------------------------- | --------------------: | --------------------------------------------------------------------------------- |
+| Local execution          | Default `-Computer localhost`   |             Supported | Local CIM sessions use DCOM.                                                      |
+| Remote computer          | `-Computer WS01`                |             Supported | Remote CIM sessions use WinRM, not the old `slmgr.vbs` DCOM/WMI command shape.    |
+| Remote user and password | `-Credentials (Get-Credential)` | Supported differently | `slmgr-ps` uses `PSCredential` instead of exposing passwords on the command line. |
+| Multiple computers       | `-Computer WS01, WS02`          |             Supported | This is a PowerShell-native improvement over the single-target `slmgr.vbs` style. |
 
-For secure communication when using WinRM for remote management, consider enabling HTTPS for WinRM. Detailed instructions can be found in the official Microsoft documentation:
+### Global options
 
-- [Enabling HTTPS for WinRM](https://docs.microsoft.com/en-us/powershell/scripting/learn/remoting/winrmsecurity?view=powershell-7.1)
+| `slmgr.vbs` option     | `slmgr-ps` equivalent                      |          Status | Notes                                                                                                   |
+| ---------------------- | ------------------------------------------ | --------------: | ------------------------------------------------------------------------------------------------------- |
+| `/ipk <ProductKey>`    | `Start-WindowsActivation -UseKmsClientKey` |         Partial | Only detected GVLK installation is supported. Arbitrary product-key input is not currently implemented. |
+| `/ato`                 | `Start-WindowsActivation`                  |         Partial | Supports activation of the selected Windows licensing product.                                          |
+| `/ato <Activation ID>` | None                                       | Not implemented | Activation-ID targeting is not currently supported.                                                     |
+| `/dli`                 | `Get-WindowsActivation`                    |       Supported | Returns basic information for the selected Windows licensing product.                                   |
+| `/dli <Activation ID>` | None                                       | Not implemented | Activation-ID targeting is not currently supported.                                                     |
+| `/dli all`             | None                                       | Not implemented | All-product enumeration is not currently supported.                                                     |
+| `/dlv`                 | `Get-WindowsActivation -Extended`          |       Supported | Returns extended information for the selected Windows licensing product.                                |
+| `/dlv <Activation ID>` | None                                       | Not implemented | Activation-ID targeting is not currently supported.                                                     |
+| `/dlv all`             | None                                       | Not implemented | All-product enumeration is not currently supported.                                                     |
+| `/xpr`                 | `Get-WindowsActivation -Expiry`            |       Supported | Returns expiry status for the selected Windows licensing product.                                       |
+| `/xpr <Activation ID>` | None                                       | Not implemented | Activation-ID targeting is not currently supported.                                                     |
+
+### Advanced options
+
+| `slmgr.vbs` option                       | `slmgr-ps` equivalent                                                |          Status | Notes                                                                                 |
+| ---------------------------------------- | -------------------------------------------------------------------- | --------------: | ------------------------------------------------------------------------------------- |
+| `/cpky`                                  | `Reset-WindowsActivation -ClearProductKeyFromRegistry`               |         Partial | Exposed by the module. Should be tested carefully against supported Windows versions. |
+| `/ilc <license_file>`                    | None                                                                 | Not implemented | License-file installation is not currently supported.                                 |
+| `/rilc`                                  | None                                                                 | Not implemented | License reinstallation from system token folders is not currently supported.          |
+| `/rearm`                                 | `Start-WindowsActivation -Rearm`                                     |       Supported | Resets activation state where supported by Windows.                                   |
+| `/rearm-app <Application ID>`            | None                                                                 | Not implemented | Application-level rearm is not currently supported.                                   |
+| `/rearm-sku <Activation ID>`             | None                                                                 | Not implemented | SKU-level rearm is not currently supported.                                           |
+| `/upk`                                   | `Reset-WindowsActivation -UninstallProductKey`                       |       Supported | Uninstalls the product key from the selected Windows licensing product.               |
+| `/upk <Activation ID>`                   | None                                                                 | Not implemented | Activation-ID targeting is not currently supported.                                   |
+| `/dti`                                   | `Get-WindowsActivation -Offline`                                     |       Supported | Returns the offline installation ID for the selected Windows licensing product.       |
+| `/dti <Activation ID>`                   | None                                                                 | Not implemented | Activation-ID targeting is not currently supported.                                   |
+| `/atp <Confirmation ID>`                 | `Start-WindowsActivation -Offline -ConfirmationId <Confirmation ID>` |       Supported | Applies a confirmation ID to the selected Windows licensing product.                  |
+| `/atp <Confirmation ID> <Activation ID>` | None                                                                 | Not implemented | Activation-ID targeting is not currently supported.                                   |
+
+### KMS client options
+
+| `slmgr.vbs` option                    | `slmgr-ps` equivalent                                                 |          Status | Notes                                                                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------- | --------------: | ------------------------------------------------------------------------------------------------------------------------- |
+| `/skms <Name[:Port]>`                 | `Start-WindowsActivation -KMSServerFQDN <FQDN> -KMSServerPort <Port>` |         Partial | FQDN and port are supported. `:port`-only input, raw IPv6 forms, and activation-ID targeting are not currently supported. |
+| `/skms <Name[:Port]> <Activation ID>` | None                                                                  | Not implemented | Product-specific KMS settings are not currently supported.                                                                |
+| `/skms-domain <FQDN>`                 | None                                                                  | Not implemented | KMS lookup-domain configuration is not currently supported.                                                               |
+| `/skms-domain <FQDN> <Activation ID>` | None                                                                  | Not implemented | Product-specific KMS lookup-domain configuration is not currently supported.                                              |
+| `/ckms`                               | `Reset-WindowsActivation -ClearKMSSettings`                           |         Partial | Currently clears the configured KMS host name. Full `/ckms` parity should also clear the configured KMS port.             |
+| `/ckms <Activation ID>`               | None                                                                  | Not implemented | Product-specific KMS clearing is not currently supported.                                                                 |
+| `/skhc`                               | None                                                                  | Not implemented | KMS host caching is enabled by default in Windows. Explicit enable support is not currently exposed.                      |
+| `/ckhc`                               | `Start-WindowsActivation -CacheDisabled`                              |         Partial | Disables KMS host caching as part of the activation workflow. Standalone cache-control is not currently exposed.          |
+
+### KMS host configuration options
+
+| `slmgr.vbs` option                       | `slmgr-ps` equivalent |          Status | Notes                                                                             |
+| ---------------------------------------- | --------------------- | --------------: | --------------------------------------------------------------------------------- |
+| `/sai <Interval>`                        | None                  | Not implemented | KMS host activation interval configuration is not currently supported.            |
+| `/sri <Interval>`                        | None                  | Not implemented | KMS host renewal interval configuration is not currently supported.               |
+| `/sprt <Port>`                           | None                  | Not implemented | KMS host listening-port configuration is not currently supported.                 |
+| `/sdns`                                  | None                  | Not implemented | KMS host DNS publishing enable is not currently supported.                        |
+| `/cdns`                                  | None                  | Not implemented | KMS host DNS publishing disable is not currently supported.                       |
+| `/spri`                                  | None                  | Not implemented | KMS host normal-priority configuration is not currently supported.                |
+| `/cpri`                                  | None                  | Not implemented | KMS host low-priority configuration is not currently supported.                   |
+| `/act-type`                              | None                  | Not implemented | Volume activation type clearing is not currently supported.                       |
+| `/act-type <0\|1\|2\|3>`                 | None                  | Not implemented | Global volume activation type configuration is not currently supported.           |
+| `/act-type <0\|1\|2\|3> <Activation ID>` | None                  | Not implemented | Product-specific volume activation type configuration is not currently supported. |
+
+### Token-based activation options
+
+| `slmgr.vbs` option                    | `slmgr-ps` equivalent |          Status | Notes                                                            |
+| ------------------------------------- | --------------------- | --------------: | ---------------------------------------------------------------- |
+| `/lil`                                | None                  | Not implemented | Issuance-license listing is not currently supported.             |
+| `/ril <ILID> <ILvID>`                 | None                  | Not implemented | Issuance-license removal is not currently supported.             |
+| `/ltc`                                | None                  | Not implemented | Token activation certificate listing is not currently supported. |
+| `/fta <Certificate Thumbprint>`       | None                  | Not implemented | Token activation is not currently supported.                     |
+| `/fta <Certificate Thumbprint> <PIN>` | None                  | Not implemented | Token activation with PIN is not currently supported.            |
+| `/stao`                               | None                  | Not implemented | Deprecated in modern Windows; use `/act-type` in `slmgr.vbs`.    |
+| `/ctao`                               | None                  | Not implemented | Deprecated in modern Windows; use `/act-type` in `slmgr.vbs`.    |
+
+### Active Directory-based activation options
+
+| `slmgr.vbs` option                                                                  | `slmgr-ps` equivalent |          Status | Notes                                                                |
+| ----------------------------------------------------------------------------------- | --------------------- | --------------: | -------------------------------------------------------------------- |
+| `/ad-activation-online <Product Key>`                                               | None                  | Not implemented | AD-based activation is not currently supported.                      |
+| `/ad-activation-online <Product Key> <Activation Object name>`                      | None                  | Not implemented | AD activation object naming is not currently supported.              |
+| `/ad-activation-get-iid <Product Key>`                                              | None                  | Not implemented | AD phone activation IID generation is not currently supported.       |
+| `/ad-activation-apply-cid <Product Key> <Confirmation ID>`                          | None                  | Not implemented | AD offline activation confirmation is not currently supported.       |
+| `/ad-activation-apply-cid <Product Key> <Confirmation ID> <Activation Object name>` | None                  | Not implemented | AD offline activation with object naming is not currently supported. |
+| `/ao-list`                                                                          | None                  | Not implemented | AD activation-object listing is not currently supported.             |
+| `/del-ao <AO_DN>` or `/del-ao <AO_RDN>`                                             | None                  | Not implemented | AD activation-object deletion is not currently supported.            |
+
+## Design differences from slmgr.vbs
+
+`slmgr-ps` is not a direct port of the command-line interface. It uses PowerShell conventions instead.
+
+- It accepts arrays of computer names.
+- It uses `PSCredential` rather than command-line password arguments.
+- It uses CIM sessions.
+- Remote execution uses WinRM.
+- It returns PowerShell objects for reporting commands.
+- It supports PowerShell pipeline-friendly usage.
+- It includes KMS client setup keys for supported Windows editions.
+- It works without Windows Script Host, so environments that block `cscript.exe` and `wscript.exe` can still perform supported activation workflows.
+
+## Current limitations
+
+The following areas are intentionally not presented as supported yet:
+
+- Arbitrary `/ipk <ProductKey>` input.
+- Activation-ID targeting.
+- `all` product enumeration.
+- Product-specific KMS settings.
+- KMS lookup-domain configuration.
+- Full KMS settings reset including port clearing.
+- KMS host configuration.
+- License-file installation and license repair.
+- Token-based activation.
+- Active Directory-based activation.
+- `slmgr.vbs` command-line syntax compatibility.
+
+## Security notes
+
+Avoid passing secrets directly on the command line. `slmgr.vbs` supports a command shape that includes username and password as arguments. `slmgr-ps` uses `PSCredential` instead, which is more appropriate for PowerShell usage and avoids exposing passwords in command-line history or process listings.
+
+For remote execution, prefer properly configured WinRM. Where appropriate, use HTTPS for WinRM. See Microsoft documentation on [WinRM security](https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/winrm-security).
 
 ## Troubleshooting
 
-If you encounter issues, use the `-Verbose` or `-Debug` parameters to get detailed logs:
+Use `-Verbose` for operational detail:
 
 ```powershell
-# Enable verbose logging
-Start-WindowsActivation -Computer WS01 -Verbose
-
-# Enable debug logging
-Start-WindowsActivation -Computer WS01 -Debug
+Get-WindowsActivation -Verbose
+Start-WindowsActivation -Verbose
+Reset-WindowsActivation -Verbose -ClearKMSSettings
 ```
 
-In case of any problems, feel free to create an issue.
+Use `-Debug` when investigating lower-level behavior:
+
+```powershell
+Start-WindowsActivation -Debug
+```
+
+Mutating operations should be run from an elevated PowerShell session. Read-only commands are intended to work without elevation, but module import behavior should be tested in your target PowerShell and Windows versions.
 
 ## Contributing
 
-The target is to be a feature-complete alternative to the `slmgr.vbs` script. Please refer to the comparison table when developing features. Any issues and PRs for bug fixes, new feature implementations, or improvements are welcome.
+The long-term goal is to cover more of the practical `slmgr.vbs` workflow surface while keeping the PowerShell interface safer and more maintainable than the original VBScript command style.
 
-Please refer to the [CONTRIBUTING.MD](CONTRIBUTING.MD) for PR guidelines.
+Useful contribution areas include:
+
+- Adding arbitrary product-key installation with safe handling.
+- Adding activation-ID selectors.
+- Adding `all` product enumeration.
+- Completing KMS settings reset.
+- Adding KMS lookup-domain support.
+- Adding standalone KMS cache enable/disable commands.
+- Adding KMS host configuration workflows.
+- Adding license installation and repair workflows.
+- Adding tests for WMI/CIM method compatibility across supported Windows versions.
+- Improving documentation and examples.
+
+Please refer to [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidance.
