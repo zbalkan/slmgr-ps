@@ -8,7 +8,7 @@ A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
 One of my hardening guidelines is to remove VBScript execution from managed Windows environments where possible.
 
-- I disabled [Windows Script Host](https://blog.f-secure.com/how-to-disable-windows-script-host/), blocking `cscript` and `wscript`.
+- I disabled [Windows Script Host](https://www.f-secure.com/en/articles/how-to-disable-windows-script-host), blocking `cscript` and `wscript`.
 
 ![Blocked WSH](images/blocked.png "Blocked WSH")
 
