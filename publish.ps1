@@ -1,8 +1,49 @@
 #Requires -Version 5
 
+$currentBranch = (git branch --show-current).Trim()
+if ($currentBranch -notin @('main', 'master')) {
+    Write-Error "Deployment is restricted to the 'main' or 'master' branch. Current branch: $currentBranch"
+    return
+}
+
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$apiKey = (Get-Content -Path.\.apikey -Raw).replace("`n", ', ').replace("`r", ', ')
+$apiKey = (Get-Content -Path '.\.apikey' -Raw).Trim()
 $module = '.\src\slmgr-ps.psd1'
 
 Publish-Module -Name $module -NuGetApiKey $apiKey
+
+# SIG # Begin signature block
+# MIIF3gYJKoZIhvcNAQcCoIIFzzCCBcsCAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAdEa8PSiih4n7D
+# G2p1xrQ9AOPn9PiMtn6wW40a8ngvbqCCA0gwggNEMIICLKADAgECAhBeeboZ6f3x
+# h0VV7tCYnf9mMA0GCSqGSIb3DQEBCwUAMCYxJDAiBgNVBAMMG0xvY2FsUG93ZXJT
+# aGVsbFNjcmlwdFNpZ25lcjAeFw0yNjA5MDYxNDI0MjdaFw0yNzA5MDYxNDQ0Mjda
+# MCYxJDAiBgNVBAMMG0xvY2FsUG93ZXJTaGVsbFNjcmlwdFNpZ25lcjCCASIwDQYJ
+# KoZIhvcNAQEBBQADggEPADCCAQoCggEBALdngrpA4XU5UEwR+k6UMaNEDyzWwSK+
+# YzqKzGJ+DWXuEaPu7PR/7HOkoMRbUDr0g8A9OVxI/5T28NfCNFkAl07SGOmbjFNF
+# /ltyS0kwqRCwG7/PB9KHxIfOalBy3UMc6uEHejWcBEi9Vw3GVNoJDVaaIajGntP0
+# geVIKVVbNyR5+rgY9pmSy7LsPbmSBPhffHuffzLD2mSBOfJs3DEWjgNSQs55OmdB
+# aNv14MdCaX0F0uS09uX2K3nlFY1feWe0iF/M5X4sbFdivLdWQp9d8CXtfFCqF8I/
+# LUG3rIsqbxIjAYJFNpScXvibR0J5VAmm/1oxjGxyg2nLcvK5ZsO/nHkCAwEAAaNu
+# MGwwDgYDVR0PAQH/BAQDAgeAMBMGA1UdJQQMMAoGCCsGAQUFBwMDMCYGA1UdEQQf
+# MB2CG0xvY2FsUG93ZXJTaGVsbFNjcmlwdFNpZ25lcjAdBgNVHQ4EFgQU602Jx4oU
+# 0bjq0bV3j3OHrYhzWDMwDQYJKoZIhvcNAQELBQADggEBAAK8CEVJTp0F2qioMKmu
+# /8LcTBgPxkAmxZZS1O6ahNFovlj2ZDgt7QxA5EVFrnZJPOaxK9lvlHfBESk/vAwM
+# XXA8oM1o2M9PFXqKJkV0bJuMxNQHeJ18OnLj20qRRoqH6bECwVyEdA5R+yQmE/0X
+# qc5+5FC5s4e5nr2aRMc2EPWiLisJITP/si2x2/Vg4BXqFJzQPzxjbqwh+4Hx1wqE
+# c3AT+JeuEQYEM4RIxPcCsvcsGDbW6oIiQSUFNI8MDIbVVLirIjBIrKp0KwX7eM40
+# APAR4+CQNoGr+r3WkOlDbC0LF9f2L8jY4MgC9HPX873nFxGR/o5XSoJWv3uXqOaY
+# 5P4xggHsMIIB6AIBATA6MCYxJDAiBgNVBAMMG0xvY2FsUG93ZXJTaGVsbFNjcmlw
+# dFNpZ25lcgIQXnm6Gen98YdFVe7QmJ3/ZjANBglghkgBZQMEAgEFAKCBhDAYBgor
+# BgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEE
+# MBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEVMC8GCSqGSIb3DQEJBDEiBCAF
+# djHRCFqzjYF4gfxOxyScY3AYPpUOu5cm9IxqaX8K2jANBgkqhkiG9w0BAQEFAASC
+# AQCzlMsWI01hbFgx6BUaFQhPLGrXik6BmWpSPnch1xlZATJ3txAt/k54k+yWXcoX
+# N2Op9pMrOF9hCJzoLhzpkaHvRYshjXYNVswIrVwctIuhVNPyTFeVFXvKu4TlhOI5
+# 6skAUOavCXd+mfrMIlSVFjEAblKhiqs7tuIERQDtBS8wjGQIVRxUWMzjQjvflwCn
+# tPkZPvlsvzYD6w2gZfFUHUiKUMo44qt+PCMtiEhNOJpvfcPLTfP78kyB9mqg0OuK
+# PUXO71URAJY5ITUkQ700EgnrqHxSCNJoxv43A/ThThtzoGum+m1vGfxrRIpAEmQX
+# ZnV51aQq4+hElyKi6FeSoQQT
+# SIG # End signature block

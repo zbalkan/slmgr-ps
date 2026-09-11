@@ -4,7 +4,11 @@ A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
 `slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially KMS activation, basic licensing status, offline activation, rearm, product-key removal, product-key registry cleanup, and KMS client reset workflows.
 
-### Changes in 1.1.1
+## Changes in 1.1.2
+
+- Fixed Publish script for master/main branch checks
+
+## Changes in 1.1.1
 
 - Corrected product-key registry clearing to use `SoftwareLicensingService`.
 - Corrected KMS reset to clear both the configured host and port while preserving the lookup domain.
