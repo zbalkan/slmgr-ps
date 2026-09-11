@@ -10,6 +10,29 @@ function Invoke-SppCimMethod
     )
     Process
     {
+        $methodClasses = @{
+            Activate                               = @('SoftwareLicensingProduct')
+            ClearKeyManagementServiceMachine       = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+            ClearKeyManagementServicePort          = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+            ClearProductKeyFromRegistry            = @('SoftwareLicensingService')
+            DepositOfflineConfirmationId           = @('SoftwareLicensingProduct')
+            DisableKeyManagementServiceHostCaching = @('SoftwareLicensingService')
+            InstallProductKey                      = @('SoftwareLicensingService')
+            ReArmWindows                           = @('SoftwareLicensingService')
+            RefreshLicenseStatus                   = @('SoftwareLicensingService')
+            SetKeyManagementServiceMachine         = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+            SetKeyManagementServicePort            = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+            UninstallProductKey                    = @('SoftwareLicensingProduct')
+        }
+
+        $className = $InputObject.CimClass.CimClassName
+        $allowedClasses = $methodClasses[$MethodName]
+
+        if ($null -ne $allowedClasses -and $className -notin $allowedClasses)
+        {
+            throw "$MethodName requires $($allowedClasses -join ' or '), but received $className"
+        }
+
         $invokeParams = @{ MethodName = $MethodName }
         if ($PSBoundParameters.ContainsKey('Arguments')) { $invokeParams['Arguments'] = $Arguments }
 

@@ -19,7 +19,6 @@ function Invoke-OfflineActivation
 
     Write-Verbose 'Submitting activation and confirmation IDs...'
     Write-Debug "Offline Installation ID: $installationId"
-    Write-Debug "Confirmation ID: $normalizedCid"
 
     $product | Invoke-SppCimMethod -MethodName DepositOfflineConfirmationId -Arguments @{
         InstallationId = $installationId
@@ -28,4 +27,18 @@ function Invoke-OfflineActivation
 
     Write-Verbose 'Updating the license status...'
     $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
+
+    $finalLicenseInfo = Get-LicenseStatus -CimSession $CimSession
+    if ($finalLicenseInfo.LicenseStatus -eq [LicenseStatusCode]::Licensed)
+    {
+        Write-Verbose 'Offline activation completed successfully.'
+    }
+    elseif ($finalLicenseInfo.LicenseStatus -eq [LicenseStatusCode]::ExtendedGrace)
+    {
+        Write-Warning 'Offline activation completed, but Windows remains in extended grace.'
+    }
+    else
+    {
+        throw "Offline activation failed. Current status: $($finalLicenseInfo.LicenseStatus)"
+    }
 }

@@ -12,7 +12,7 @@
     RootModule        = 'slmgr-ps.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.1.0'
+    ModuleVersion     = '1.1.1'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -107,7 +107,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            # ReleaseNotes = ''
+            ReleaseNotes = 'Corrected SPP method targeting and KMS reset, preserved caller state, enabled non-elevated import, verified offline activation outcomes, and expanded client contract tests.'
 
             # External dependent modules of this module
             # ExternalModuleDependencies = ''
@@ -123,4 +123,3 @@
     # DefaultCommandPrefix = ''
 
 }
-

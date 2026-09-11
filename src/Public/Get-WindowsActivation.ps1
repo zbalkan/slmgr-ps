@@ -68,9 +68,6 @@ function Get-WindowsActivation
     )
     Begin
     {
-        $PreviousPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Stop'
-        Write-Verbose 'ErrorActionPreference: Stop'
         $results = [System.Collections.Generic.List[PSCustomObject]]::new()
     }
     Process
@@ -79,26 +76,26 @@ function Get-WindowsActivation
         foreach ($c in $Computer)
         {
             Write-Verbose "Creating new CimSession for computer $c"
-            $session = Get-Session -Computer $c -Credentials $Credentials
+            $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
             try
             {
                 switch ($PSCmdlet.ParameterSetName)
                 {
                     'Extended'
                     {
-                        $result = Get-ExtendedLicenseInformation -CimSession $session
+                        $result = Get-ExtendedLicenseInformation -CimSession $session -ErrorAction Stop
                     }
                     'Expiry'
                     {
-                        $result = Get-ExpiryInformation -CimSession $session
+                        $result = Get-ExpiryInformation -CimSession $session -ErrorAction Stop
                     }
                     'Offline'
                     {
-                        $result = Get-OfflineInstallationId -CimSession $session
+                        $result = Get-OfflineInstallationId -CimSession $session -ErrorAction Stop
                     }
                     default
                     {
-                        $result = Get-BasicLicenseInformation -CimSession $session
+                        $result = Get-BasicLicenseInformation -CimSession $session -ErrorAction Stop
                     }
                 }
                 $results.Add($result)
@@ -114,7 +111,6 @@ function Get-WindowsActivation
     }
     End
     {
-        $ErrorActionPreference = $PreviousPreference
         return $results.ToArray()
     }
 }
