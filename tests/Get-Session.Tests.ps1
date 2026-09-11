@@ -16,6 +16,15 @@ Describe 'Get-Session' {
         Should -Invoke New-CimSession -ParameterFilter { $Name -eq 'SlmgrLocalSession' } -Times 1
     }
 
+    It 'passes credentials to a local DCOM session' {
+        $credential = [PSCredential]::new('DOMAIN\user', (ConvertTo-SecureString 'test' -AsPlainText -Force))
+        Get-Session -Computer localhost -Credentials $credential | Should -Be $script:MockSession
+        Should -Invoke New-CimSessionOption -ParameterFilter { $Protocol -eq 'Dcom' } -Times 1
+        Should -Invoke New-CimSession -ParameterFilter {
+            $Name -eq 'SlmgrLocalSession' -and $Credential.UserName -eq 'DOMAIN\user'
+        } -Times 1
+    }
+
     It 'uses the remote session path for a named computer' {
         Get-Session -Computer WS01 | Should -Be $script:MockSession
         Should -Invoke New-CimSessionOption -Times 0

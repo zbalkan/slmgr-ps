@@ -12,7 +12,9 @@ Describe 'Invoke-SppCimMethod' {
 
     It 'accepts a service method on SoftwareLicensingService' {
         $script:Service | Invoke-SppCimMethod -MethodName ClearProductKeyFromRegistry
-        Should -Invoke Invoke-CimMethod -Times 1
+        Should -Invoke Invoke-CimMethod -ParameterFilter {
+            $MethodName -eq 'ClearProductKeyFromRegistry'
+        } -Times 1
     }
 
     It 'rejects a service method on SoftwareLicensingProduct' {
@@ -23,7 +25,7 @@ Describe 'Invoke-SppCimMethod' {
 
     It 'accepts a product method on SoftwareLicensingProduct' {
         $script:Product | Invoke-SppCimMethod -MethodName Activate
-        Should -Invoke Invoke-CimMethod -Times 1
+        Should -Invoke Invoke-CimMethod -ParameterFilter { $MethodName -eq 'Activate' } -Times 1
     }
 
     It 'rejects a product method on SoftwareLicensingService' {

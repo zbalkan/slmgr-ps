@@ -48,6 +48,29 @@ Describe 'Invoke-OfflineActivation' {
         } -Times 1
     }
 
+    It 'removes spaces from the confirmation ID' {
+        Invoke-OfflineActivation -CimSession $script:MockCimSession -Service $script:Service `
+            -ConfirmationId '123456 123456 123456 123456 123456 123456 123456 123456 123456'
+
+        Should -Invoke Invoke-SppCimMethod -ParameterFilter {
+            $MethodName -eq 'DepositOfflineConfirmationId' -and
+            $Arguments.ConfirmationId -eq '123456123456123456123456123456123456123456123456123456'
+        } -Times 1
+    }
+
+    It 'does not submit an offline activation when already activated' {
+        Mock Get-LicenseStatus {
+            [PSCustomObject]@{ LicenseStatus = [LicenseStatusCode]::Licensed; Activated = $true }
+        }
+
+        { Invoke-OfflineActivation -CimSession $script:MockCimSession -Service $script:Service `
+                -ConfirmationId ('1' * 54) } | Should -Not -Throw
+
+        Should -Invoke Invoke-SppCimMethod -Times 0
+        Should -Invoke Get-WindowsLicensingProduct -Times 0
+        Should -Invoke Get-OfflineInstallationId -Times 0
+    }
+
     It 'refreshes and verifies the final license status' {
         Invoke-OfflineActivation -CimSession $script:MockCimSession -Service $script:Service `
             -ConfirmationId ('1' * 54)
