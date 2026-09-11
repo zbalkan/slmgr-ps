@@ -34,6 +34,15 @@ Describe 'Invoke-SppCimMethod' {
         Should -Invoke Invoke-CimMethod -Times 0
     }
 
+    It 'accepts a KMS client method on either licensing class' {
+        $script:Service | Invoke-SppCimMethod -MethodName ClearKeyManagementServiceMachine
+        $script:Product | Invoke-SppCimMethod -MethodName ClearKeyManagementServiceMachine
+
+        Should -Invoke Invoke-CimMethod -ParameterFilter {
+            $MethodName -eq 'ClearKeyManagementServiceMachine'
+        } -Times 2
+    }
+
     It 'throws when the provider returns a non-zero value' {
         Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = 5 } }
         { $script:Product | Invoke-SppCimMethod -MethodName Activate } |

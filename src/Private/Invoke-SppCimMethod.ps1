@@ -10,36 +10,27 @@ function Invoke-SppCimMethod
     )
     Process
     {
-        $serviceMethods = @(
-            'ClearKeyManagementServiceMachine',
-            'ClearKeyManagementServicePort',
-            'ClearProductKeyFromRegistry',
-            'DisableKeyManagementServiceHostCaching',
-            'InstallProductKey',
-            'ReArmWindows',
-            'RefreshLicenseStatus',
-            'SetKeyManagementServiceMachine',
-            'SetKeyManagementServicePort'
-        )
-        $productMethods = @(
-            'Activate',
-            'DepositOfflineConfirmationId',
-            'UninstallProductKey'
-        )
+        $methodClasses = @{
+            Activate                               = @('SoftwareLicensingProduct')
+            ClearKeyManagementServiceMachine       = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+            ClearKeyManagementServicePort          = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+            ClearProductKeyFromRegistry            = @('SoftwareLicensingService')
+            DepositOfflineConfirmationId           = @('SoftwareLicensingProduct')
+            DisableKeyManagementServiceHostCaching = @('SoftwareLicensingService')
+            InstallProductKey                      = @('SoftwareLicensingService')
+            ReArmWindows                           = @('SoftwareLicensingService')
+            RefreshLicenseStatus                   = @('SoftwareLicensingService')
+            SetKeyManagementServiceMachine         = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+            SetKeyManagementServicePort            = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+            UninstallProductKey                    = @('SoftwareLicensingProduct')
+        }
 
         $className = $InputObject.CimClass.CimClassName
-        $expectedClass = if ($MethodName -in $serviceMethods)
-        {
-            'SoftwareLicensingService'
-        }
-        elseif ($MethodName -in $productMethods)
-        {
-            'SoftwareLicensingProduct'
-        }
+        $allowedClasses = $methodClasses[$MethodName]
 
-        if ($null -ne $expectedClass -and $className -ne $expectedClass)
+        if ($null -ne $allowedClasses -and $className -notin $allowedClasses)
         {
-            throw "$MethodName requires $expectedClass, but received $className"
+            throw "$MethodName requires $($allowedClasses -join ' or '), but received $className"
         }
 
         $invokeParams = @{ MethodName = $MethodName }

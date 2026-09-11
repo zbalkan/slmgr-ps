@@ -24,7 +24,15 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
     }
 
     It 'exposes product-scoped methods on SoftwareLicensingProduct' {
-        $expectedMethods = @('Activate', 'DepositOfflineConfirmationId', 'UninstallProductKey')
+        $expectedMethods = @(
+            'Activate',
+            'ClearKeyManagementServiceMachine',
+            'ClearKeyManagementServicePort',
+            'DepositOfflineConfirmationId',
+            'SetKeyManagementServiceMachine',
+            'SetKeyManagementServicePort',
+            'UninstallProductKey'
+        )
         foreach ($method in $expectedMethods)
         {
             $script:ProductClass.CimClassMethods.Name | Should -Contain $method
