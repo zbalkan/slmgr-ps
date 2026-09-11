@@ -2,7 +2,16 @@
 
 A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
-`slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially KMS activation, basic licensing status, offline activation, rearm, product-key removal, product-key registry cleanup, and partial KMS client reset workflows.
+`slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially KMS activation, basic licensing status, offline activation, rearm, product-key removal, product-key registry cleanup, and KMS client reset workflows.
+
+### Changes in 1.1.1
+
+- Corrected product-key registry clearing to use `SoftwareLicensingService`.
+- Corrected KMS reset to clear both the configured host and port while preserving the lookup domain.
+- Allowed non-elevated module import for read-only commands.
+- Preserved the caller's error-action preference when commands fail.
+- Added final-state verification for offline activation.
+- Added SPP class-contract, session, and failure-path tests.
 
 ## About this module
 
@@ -124,7 +133,7 @@ Reset-WindowsActivation -UninstallProductKey
 # Clear the product key from registry storage
 Reset-WindowsActivation -ClearProductKeyFromRegistry
 
-# Clear the configured KMS host name
+# Clear the configured KMS host name and port
 Reset-WindowsActivation -ClearKMSSettings
 
 # Combine operations
@@ -134,7 +143,7 @@ Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry -Clear
 Reset-WindowsActivation -Computer WS01 -Credentials (Get-Credential) -UninstallProductKey -ClearProductKeyFromRegistry
 ```
 
-`-ClearKMSSettings` currently clears the configured KMS host name. It should not be described as full `/ckms` parity until KMS port clearing and activation-ID-specific KMS clearing are implemented and tested.
+`-ClearKMSSettings` clears the configured KMS host name and port. It preserves a configured KMS lookup domain, matching the default `/ckms` behavior. Activation-ID-specific KMS clearing is not yet supported.
 
 ## Comparison with slmgr.vbs
 
@@ -175,7 +184,7 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 | `slmgr.vbs` option                       | `slmgr-ps` equivalent                                                |          Status | Notes                                                                                 |
 | ---------------------------------------- | -------------------------------------------------------------------- | --------------: | ------------------------------------------------------------------------------------- |
-| `/cpky`                                  | `Reset-WindowsActivation -ClearProductKeyFromRegistry`               |         Partial | Exposed by the module. Should be tested carefully against supported Windows versions. |
+| `/cpky`                                  | `Reset-WindowsActivation -ClearProductKeyFromRegistry`               |       Supported | Clears the product key from registry storage through `SoftwareLicensingService`.      |
 | `/ilc <license_file>`                    | None                                                                 | Not implemented | License-file installation is not currently supported.                                 |
 | `/rilc`                                  | None                                                                 | Not implemented | License reinstallation from system token folders is not currently supported.          |
 | `/rearm`                                 | `Start-WindowsActivation -Rearm`                                     |       Supported | Resets activation state where supported by Windows.                                   |
@@ -196,7 +205,7 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 | `/skms <Name[:Port]> <Activation ID>` | None                                                                  | Not implemented | Product-specific KMS settings are not currently supported.                                                                |
 | `/skms-domain <FQDN>`                 | None                                                                  | Not implemented | KMS lookup-domain configuration is not currently supported.                                                               |
 | `/skms-domain <FQDN> <Activation ID>` | None                                                                  | Not implemented | Product-specific KMS lookup-domain configuration is not currently supported.                                              |
-| `/ckms`                               | `Reset-WindowsActivation -ClearKMSSettings`                           |         Partial | Currently clears the configured KMS host name. Full `/ckms` parity should also clear the configured KMS port.             |
+| `/ckms`                               | `Reset-WindowsActivation -ClearKMSSettings`                           |       Supported | Clears the configured KMS host name and port while preserving the KMS lookup domain.                                      |
 | `/ckms <Activation ID>`               | None                                                                  | Not implemented | Product-specific KMS clearing is not currently supported.                                                                 |
 | `/skhc`                               | None                                                                  | Not implemented | KMS host caching is enabled by default in Windows. Explicit enable support is not currently exposed.                      |
 | `/ckhc`                               | `Start-WindowsActivation -CacheDisabled`                              |         Partial | Disables KMS host caching as part of the activation workflow. Standalone cache-control is not currently exposed.          |
@@ -291,7 +300,7 @@ Use `-Debug` when investigating lower-level behavior:
 Start-WindowsActivation -Debug
 ```
 
-Mutating operations should be run from an elevated PowerShell session. Read-only commands are intended to work without elevation, but module import behavior should be tested in your target PowerShell and Windows versions.
+The module can be imported without elevation for read-only commands. Mutating operations should be run with credentials that have the required privileges on the target computer.
 
 ## Contributing
 
@@ -302,7 +311,7 @@ Useful contribution areas include:
 - Adding arbitrary product-key installation with safe handling.
 - Adding activation-ID selectors.
 - Adding `all` product enumeration.
-- Completing KMS settings reset.
+- Adding activation-ID-specific KMS settings reset.
 - Adding KMS lookup-domain support.
 - Adding standalone KMS cache enable/disable commands.
 - Adding KMS host configuration workflows.
