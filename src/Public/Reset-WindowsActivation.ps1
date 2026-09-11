@@ -1,4 +1,3 @@
-#Requires -RunAsAdministrator
 #Requires -Version 5
 
 <#
@@ -66,10 +65,6 @@ function Reset-WindowsActivation
     )
     Begin
     {
-        $PreviousPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Stop'
-        Write-Verbose 'ErrorActionPreference: Stop'
-
         if (-not $UninstallProductKey.IsPresent -and -not $ClearProductKeyFromRegistry.IsPresent -and -not $ClearKMSSettings.IsPresent)
         {
             throw 'At least one reset operation must be specified: -UninstallProductKey, -ClearProductKeyFromRegistry, or -ClearKMSSettings.'
@@ -89,7 +84,7 @@ function Reset-WindowsActivation
             $session = $null
             try
             {
-                $session = Get-Session -Computer $c -Credentials $Credentials
+                $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
 
                 if ($UninstallProductKey.IsPresent)
                 {
@@ -101,7 +96,7 @@ function Reset-WindowsActivation
 
                 if ($ClearProductKeyFromRegistry.IsPresent -or $ClearKMSSettings.IsPresent)
                 {
-                    $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService
+                    $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService -ErrorAction Stop
                 }
 
                 if ($ClearProductKeyFromRegistry.IsPresent)
@@ -117,10 +112,6 @@ function Reset-WindowsActivation
                     $service | Invoke-SppCimMethod -MethodName ClearKeyManagementServicePort
                 }
             }
-            catch
-            {
-                throw
-            }
             finally
             {
                 if ($null -ne $session)
@@ -129,9 +120,5 @@ function Reset-WindowsActivation
                 }
             }
         }
-    }
-    End
-    {
-        $ErrorActionPreference = $PreviousPreference
     }
 }

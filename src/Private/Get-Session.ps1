@@ -15,14 +15,14 @@ function Get-Session
     if ($Computer.Count -eq 1 -and ($Computer[0] -eq 'localhost' -or $Computer[0] -eq '.' -or $Computer[0] -eq '127.0.0.1' -or $null -eq $Computer[0]))
     {
         Write-Verbose 'Using DCOM protocol for CIM session'
-        $dcomOption = New-CimSessionOption -Protocol Dcom
+        $dcomOption = New-CimSessionOption -Protocol Dcom -ErrorAction Stop
         if ($null -eq $Credentials)
         {
-            $session = New-CimSession -SessionOption $dcomOption -Name 'SlmgrLocalSession'
+            $session = New-CimSession -SessionOption $dcomOption -Name 'SlmgrLocalSession' -ErrorAction Stop
         }
         else
         {
-            $session = New-CimSession -SessionOption $dcomOption -Name 'SlmgrLocalSession' -Credential $Credentials
+            $session = New-CimSession -SessionOption $dcomOption -Name 'SlmgrLocalSession' -Credential $Credentials -ErrorAction Stop
         }
     }
     else # if multiple hosts are given including localhost, then it will try to use WinRM, instead of DCOM.
@@ -30,7 +30,7 @@ function Get-Session
         Write-Verbose 'Using WinRM protocol for CIM session'
         $sessionParams = @{ ComputerName = $Computer; Name = 'SlmgrRemoteSession' }
         if ($null -ne $Credentials) { $sessionParams['Credential'] = $Credentials }
-        $session = New-CimSession @sessionParams
+        $session = New-CimSession @sessionParams -ErrorAction Stop
     }
     return $session
 }
