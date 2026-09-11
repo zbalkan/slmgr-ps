@@ -154,6 +154,7 @@ function Start-WindowsActivation
     )
     Process
     {
+        $activationFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
         Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
         foreach ($c in $Computer)
         {
@@ -209,6 +210,7 @@ function Start-WindowsActivation
             }
             catch
             {
+                $activationFailures.Add($_)
                 Write-Error -ErrorRecord $_
             }
             finally
@@ -218,6 +220,11 @@ function Start-WindowsActivation
                     Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
                 }
             }
+        }
+
+        if ($activationFailures.Count -gt 0)
+        {
+            $PSCmdlet.ThrowTerminatingError($activationFailures[0])
         }
     }
 }

@@ -24,12 +24,20 @@ Describe 'Start-WindowsActivation' {
     }
 
     It 'continues a computer batch after an offline activation failure' {
-        Start-WindowsActivation -Computer WS01, WS02 -Offline -ConfirmationId ('1' * 54) `
-            -Confirm:$false -ErrorAction SilentlyContinue -ErrorVariable activationErrors
+        { Start-WindowsActivation -Computer WS01, WS02 -Offline -ConfirmationId ('1' * 54) `
+                -Confirm:$false -ErrorAction SilentlyContinue } |
+            Should -Throw -ExpectedMessage '*Offline activation failed*'
 
-        $activationErrors | Should -Not -BeNullOrEmpty
-        $activationErrors.Exception.Message | Should -Contain 'Offline activation failed'
         Should -Invoke Invoke-OfflineActivation -Times 2
         Should -Invoke Remove-CimSession -Times 2
+    }
+
+    It 'throws after a single-computer activation failure' {
+        { Start-WindowsActivation -Computer WS01 -Offline -ConfirmationId ('1' * 54) `
+                -Confirm:$false -ErrorAction SilentlyContinue } |
+            Should -Throw -ExpectedMessage '*Offline activation failed*'
+
+        Should -Invoke Invoke-OfflineActivation -Times 1
+        Should -Invoke Remove-CimSession -Times 1
     }
 }
