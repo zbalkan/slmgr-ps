@@ -64,7 +64,7 @@ Describe 'Reset-WindowsActivation' {
             Mock Invoke-SppCimMethod {}
         }
 
-        It 'Calls ClearProductKeyFromRegistry on the product' {
+        It 'Calls ClearProductKeyFromRegistry on the service' {
             Reset-WindowsActivation -ClearProductKeyFromRegistry -Confirm:$false
             Should -Invoke Invoke-SppCimMethod -ParameterFilter { $MethodName -eq 'ClearProductKeyFromRegistry' } -Times 1
         }

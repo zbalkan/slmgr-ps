@@ -1,11 +1,12 @@
 BeforeAll {
     . $PSScriptRoot/../src/Private/Get-Session.ps1
     $script:MockSession = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
+    $script:DcomOption = New-CimSessionOption -Protocol Dcom
 }
 
 Describe 'Get-Session' {
     BeforeEach {
-        Mock New-CimSessionOption { [PSCustomObject]@{ Protocol = 'Dcom' } }
+        Mock New-CimSessionOption { $script:DcomOption }
         Mock New-CimSession { $script:MockSession }
     }
 

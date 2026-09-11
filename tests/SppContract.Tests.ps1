@@ -19,7 +19,7 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
 
         foreach ($method in $expectedMethods)
         {
-            $script:ServiceClass.CimClassMethods.Keys | Should -Contain $method
+            $script:ServiceClass.CimClassMethods.Name | Should -Contain $method
         }
     }
 
@@ -27,11 +27,11 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
         $expectedMethods = @('Activate', 'DepositOfflineConfirmationId', 'UninstallProductKey')
         foreach ($method in $expectedMethods)
         {
-            $script:ProductClass.CimClassMethods.Keys | Should -Contain $method
+            $script:ProductClass.CimClassMethods.Name | Should -Contain $method
         }
     }
 
     It 'does not expose ClearProductKeyFromRegistry on SoftwareLicensingProduct' {
-        $script:ProductClass.CimClassMethods.Keys | Should -Not -Contain 'ClearProductKeyFromRegistry'
+        $script:ProductClass.CimClassMethods.Name | Should -Not -Contain 'ClearProductKeyFromRegistry'
     }
 }
