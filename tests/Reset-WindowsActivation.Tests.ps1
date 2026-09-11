@@ -140,4 +140,27 @@ Describe 'Reset-WindowsActivation' {
             Should -Invoke Remove-CimSession -Times 1
         }
     }
+
+    Context 'Partial KMS reset failure' {
+        BeforeEach {
+            Mock Get-Session { $script:MockCimSession }
+            Mock Remove-CimSession {}
+            Mock Get-CimInstance { [PSCustomObject]@{ ClassName = 'SoftwareLicensingService' } }
+            Mock Invoke-SppCimMethod {
+                if ($MethodName -eq 'ClearKeyManagementServicePort')
+                {
+                    throw 'Port clear failed'
+                }
+            }
+        }
+
+        It 'surfaces a failure after the machine setting was cleared' {
+            { Reset-WindowsActivation -ClearKMSSettings -Confirm:$false } |
+                Should -Throw -ExpectedMessage '*Port clear failed*'
+            Should -Invoke Invoke-SppCimMethod -ParameterFilter {
+                $MethodName -eq 'ClearKeyManagementServiceMachine'
+            } -Times 1
+            Should -Invoke Remove-CimSession -Times 1
+        }
+    }
 }
