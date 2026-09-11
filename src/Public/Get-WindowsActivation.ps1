@@ -83,19 +83,19 @@ function Get-WindowsActivation
                 {
                     'Extended'
                     {
-                        $result = Get-ExtendedLicenseInformation -CimSession $session
+                        $result = Get-ExtendedLicenseInformation -CimSession $session -ErrorAction Stop
                     }
                     'Expiry'
                     {
-                        $result = Get-ExpiryInformation -CimSession $session
+                        $result = Get-ExpiryInformation -CimSession $session -ErrorAction Stop
                     }
                     'Offline'
                     {
-                        $result = Get-OfflineInstallationId -CimSession $session
+                        $result = Get-OfflineInstallationId -CimSession $session -ErrorAction Stop
                     }
                     default
                     {
-                        $result = Get-BasicLicenseInformation -CimSession $session
+                        $result = Get-BasicLicenseInformation -CimSession $session -ErrorAction Stop
                     }
                 }
                 $results.Add($result)

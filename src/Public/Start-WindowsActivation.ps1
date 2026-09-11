@@ -207,6 +207,10 @@ function Start-WindowsActivation
                     }
                 }
             }
+            catch
+            {
+                Write-Error -ErrorRecord $_
+            }
             finally
             {
                 if ($null -ne $session)

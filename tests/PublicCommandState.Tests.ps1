@@ -16,12 +16,17 @@ Describe 'Public command state' {
         }
     }
 
-    It 'preserves ErrorActionPreference when validation fails' {
+    It 'preserves ErrorActionPreference when a license query fails' {
         $previousPreference = $ErrorActionPreference
         try
         {
+            $session = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
+            Mock Get-Session -ModuleName slmgr-ps { $session }
+            Mock Remove-CimSession -ModuleName slmgr-ps {}
+            Mock Get-CimInstance -ModuleName slmgr-ps { Write-Error 'License query failed' }
+
             $ErrorActionPreference = 'Continue'
-            { Reset-WindowsActivation -Confirm:$false } | Should -Throw
+            { Get-WindowsActivation } | Should -Throw -ExpectedMessage '*License query failed*'
             $ErrorActionPreference | Should -Be 'Continue'
         }
         finally
