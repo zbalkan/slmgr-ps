@@ -1,4 +1,3 @@
-#Requires -RunAsAdministrator
 #Requires -Version 5
 
 <#
@@ -153,14 +152,9 @@ function Start-WindowsActivation
         $ConfirmationId
 
     )
-    Begin
-    {
-        $PreviousPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Stop'
-        Write-Verbose 'ErrorActionPreference: Stop'
-    }
     Process
     {
+        $activationFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
         Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
         foreach ($c in $Computer)
         {
@@ -173,10 +167,10 @@ function Start-WindowsActivation
             $session = $null
             try
             {
-                $session = Get-Session -Computer $c -Credentials $Credentials
+                $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
 
                 Write-Verbose 'Connecting to SoftwareLicensingService...'
-                $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService
+                $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService -ErrorAction Stop
 
                 switch ($PSCmdlet.ParameterSetName)
                 {
@@ -216,7 +210,8 @@ function Start-WindowsActivation
             }
             catch
             {
-                throw
+                $activationFailures.Add($_)
+                Write-Error -ErrorRecord $_
             }
             finally
             {
@@ -226,9 +221,10 @@ function Start-WindowsActivation
                 }
             }
         }
-    }
-    End
-    {
-        $ErrorActionPreference = $PreviousPreference
+
+        if ($activationFailures.Count -gt 0)
+        {
+            $PSCmdlet.ThrowTerminatingError($activationFailures[0])
+        }
     }
 }

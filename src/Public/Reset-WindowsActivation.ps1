@@ -1,4 +1,3 @@
-#Requires -RunAsAdministrator
 #Requires -Version 5
 
 <#
@@ -66,10 +65,6 @@ function Reset-WindowsActivation
     )
     Begin
     {
-        $PreviousPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Stop'
-        Write-Verbose 'ErrorActionPreference: Stop'
-
         if (-not $UninstallProductKey.IsPresent -and -not $ClearProductKeyFromRegistry.IsPresent -and -not $ClearKMSSettings.IsPresent)
         {
             throw 'At least one reset operation must be specified: -UninstallProductKey, -ClearProductKeyFromRegistry, or -ClearKMSSettings.'
@@ -89,35 +84,33 @@ function Reset-WindowsActivation
             $session = $null
             try
             {
-                $session = Get-Session -Computer $c -Credentials $Credentials
+                $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
 
-                if ($UninstallProductKey.IsPresent -or $ClearProductKeyFromRegistry.IsPresent)
+                if ($UninstallProductKey.IsPresent)
                 {
                     $product = Get-WindowsLicensingProduct -CimSession $session
 
-                    if ($UninstallProductKey.IsPresent)
-                    {
-                        Write-Verbose 'Uninstalling product key (slmgr /upk)'
-                        $product | Invoke-SppCimMethod -MethodName UninstallProductKey
-                    }
+                    Write-Verbose 'Uninstalling product key (slmgr /upk)'
+                    $product | Invoke-SppCimMethod -MethodName UninstallProductKey
+                }
 
-                    if ($ClearProductKeyFromRegistry.IsPresent)
-                    {
-                        Write-Verbose 'Clearing product key from registry (slmgr /cpky)'
-                        $product | Invoke-SppCimMethod -MethodName ClearProductKeyFromRegistry
-                    }
+                if ($ClearProductKeyFromRegistry.IsPresent -or $ClearKMSSettings.IsPresent)
+                {
+                    $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService -ErrorAction Stop
+                }
+
+                if ($ClearProductKeyFromRegistry.IsPresent)
+                {
+                    Write-Verbose 'Clearing product key from registry (slmgr /cpky)'
+                    $service | Invoke-SppCimMethod -MethodName ClearProductKeyFromRegistry
                 }
 
                 if ($ClearKMSSettings.IsPresent)
                 {
                     Write-Verbose 'Clearing KMS settings (slmgr /ckms)'
-                    $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService
                     $service | Invoke-SppCimMethod -MethodName ClearKeyManagementServiceMachine
+                    $service | Invoke-SppCimMethod -MethodName ClearKeyManagementServicePort
                 }
-            }
-            catch
-            {
-                throw
             }
             finally
             {
@@ -127,9 +120,5 @@ function Reset-WindowsActivation
                 }
             }
         }
-    }
-    End
-    {
-        $ErrorActionPreference = $PreviousPreference
     }
 }
