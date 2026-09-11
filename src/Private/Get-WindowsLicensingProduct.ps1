@@ -15,7 +15,7 @@ function Get-WindowsLicensingProduct
     WHERE ApplicationID = '55c92734-d682-4d71-983e-d6ec3f16059f'
     AND PartialProductKey IS NOT NULL"
 
-    $candidates = @(Get-CimInstance -CimSession $CimSession -Query $query)
+    $candidates = @(Get-CimInstance -CimSession $CimSession -Query $query -ErrorAction Stop)
 
     if ($candidates.Count -eq 0)
     {

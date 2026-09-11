@@ -27,7 +27,8 @@ Describe 'Start-WindowsActivation' {
         Start-WindowsActivation -Computer WS01, WS02 -Offline -ConfirmationId ('1' * 54) `
             -Confirm:$false -ErrorAction SilentlyContinue -ErrorVariable activationErrors
 
-        $activationErrors.Count | Should -Be 1
+        $activationErrors | Should -Not -BeNullOrEmpty
+        $activationErrors.Exception.Message | Should -Contain 'Offline activation failed'
         Should -Invoke Invoke-OfflineActivation -Times 2
         Should -Invoke Remove-CimSession -Times 2
     }

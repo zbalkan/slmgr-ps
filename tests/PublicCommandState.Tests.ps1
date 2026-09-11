@@ -23,11 +23,14 @@ Describe 'Public command state' {
             $session = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
             Mock Get-Session -ModuleName slmgr-ps { $session }
             Mock Remove-CimSession -ModuleName slmgr-ps {}
-            Mock Get-CimInstance -ModuleName slmgr-ps { Write-Error 'License query failed' }
+            Mock Get-CimInstance -ModuleName slmgr-ps { throw 'License query failed' }
 
             $ErrorActionPreference = 'Continue'
             { Get-WindowsActivation } | Should -Throw -ExpectedMessage '*License query failed*'
             $ErrorActionPreference | Should -Be 'Continue'
+            Should -Invoke Get-CimInstance -ModuleName slmgr-ps -ParameterFilter {
+                $ErrorAction -eq 'Stop'
+            } -Times 1
         }
         finally
         {
