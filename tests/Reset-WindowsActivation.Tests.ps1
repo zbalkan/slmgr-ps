@@ -57,8 +57,9 @@ Describe 'Reset-WindowsActivation' {
         BeforeEach {
             Mock Get-Session { $script:MockCimSession }
             Mock Remove-CimSession {}
-            Mock Get-WindowsLicensingProduct {
-                [PSCustomObject]@{ Name = 'Windows 11 Pro'; LicenseStatus = 1 }
+            Mock Get-WindowsLicensingProduct {}
+            Mock Get-CimInstance {
+                [PSCustomObject]@{ ClassName = 'SoftwareLicensingService' }
             }
             Mock Invoke-SppCimMethod {}
         }
@@ -66,6 +67,18 @@ Describe 'Reset-WindowsActivation' {
         It 'Calls ClearProductKeyFromRegistry on the product' {
             Reset-WindowsActivation -ClearProductKeyFromRegistry -Confirm:$false
             Should -Invoke Invoke-SppCimMethod -ParameterFilter { $MethodName -eq 'ClearProductKeyFromRegistry' } -Times 1
+        }
+
+        It 'Invokes the method on SoftwareLicensingService' {
+            Reset-WindowsActivation -ClearProductKeyFromRegistry -Confirm:$false
+            Should -Invoke Invoke-SppCimMethod -ParameterFilter {
+                $MethodName -eq 'ClearProductKeyFromRegistry' -and $InputObject.ClassName -eq 'SoftwareLicensingService'
+            } -Times 1
+        }
+
+        It 'Does not look up a licensing product' {
+            Reset-WindowsActivation -ClearProductKeyFromRegistry -Confirm:$false
+            Should -Invoke Get-WindowsLicensingProduct -Times 0
         }
     }
 
@@ -83,6 +96,11 @@ Describe 'Reset-WindowsActivation' {
         It 'Calls ClearKeyManagementServiceMachine on the service' {
             Reset-WindowsActivation -ClearKMSSettings -Confirm:$false
             Should -Invoke Invoke-SppCimMethod -ParameterFilter { $MethodName -eq 'ClearKeyManagementServiceMachine' } -Times 1
+        }
+
+        It 'Calls ClearKeyManagementServicePort on the service' {
+            Reset-WindowsActivation -ClearKMSSettings -Confirm:$false
+            Should -Invoke Invoke-SppCimMethod -ParameterFilter { $MethodName -eq 'ClearKeyManagementServicePort' } -Times 1
         }
 
         It 'Does not look up the product' {
@@ -104,9 +122,9 @@ Describe 'Reset-WindowsActivation' {
             Mock Invoke-SppCimMethod {}
         }
 
-        It 'Calls all three methods when all switches are specified' {
+        It 'Calls all four methods when all switches are specified' {
             Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry -ClearKMSSettings -Confirm:$false
-            Should -Invoke Invoke-SppCimMethod -Times 3
+            Should -Invoke Invoke-SppCimMethod -Times 4
         }
     }
 
