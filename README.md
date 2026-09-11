@@ -271,7 +271,7 @@ The following areas are intentionally not presented as supported yet:
 - `all` product enumeration.
 - Product-specific KMS settings.
 - KMS lookup-domain configuration.
-- Full KMS settings reset including port clearing.
+- Product-specific KMS settings reset by activation ID.
 - KMS host configuration.
 - License-file installation and license repair.
 - Token-based activation.
