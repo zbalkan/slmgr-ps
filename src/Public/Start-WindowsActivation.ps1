@@ -176,11 +176,16 @@ function Start-WindowsActivation
     )
     Begin
     {
-        if ($UseKmsClientKey.IsPresent -and $PSBoundParameters.ContainsKey('ProductKey'))
+        $hasProductKey = $PSBoundParameters.ContainsKey('ProductKey')
+        $hasActivationId = $PSBoundParameters.ContainsKey('ActivationId')
+        if ($UseKmsClientKey.IsPresent -and $hasProductKey)
         {
             throw 'UseKmsClientKey and ProductKey cannot be used together.'
         }
-        $hasProductKey = $PSBoundParameters.ContainsKey('ProductKey')
+        if ($hasActivationId -and ($UseKmsClientKey.IsPresent -or $hasProductKey))
+        {
+            throw 'ActivationId cannot be combined with product-key installation because InstallProductKey is service-scoped.'
+        }
         $hasInvalidProductKey = $ProductKey -notmatch '^[A-Za-z0-9]{5}(?:-[A-Za-z0-9]{5}){4}$'
         if ($hasProductKey -and $hasInvalidProductKey)
         {
