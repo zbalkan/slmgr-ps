@@ -41,4 +41,18 @@ Describe 'Get-LicenseStatus' {
         $result.PSObject.Properties.Name | Should -Contain 'LicenseStatus'
         $result.PSObject.Properties.Name | Should -Not -Contain 'License Status'
     }
+
+    It 'resolves an exact activation ID when supplied' {
+        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        Mock Get-WindowsLicensingProduct {
+            [PSCustomObject]@{ LicenseStatus = 1 }
+        }
+
+        $result = Get-LicenseStatus -CimSession $null -ActivationId $activationId
+
+        $result.Activated | Should -BeTrue
+        Should -Invoke Get-WindowsLicensingProduct -Times 1 -ParameterFilter {
+            $ActivationId -eq $activationId
+        }
+    }
 }

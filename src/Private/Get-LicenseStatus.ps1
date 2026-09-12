@@ -3,10 +3,13 @@ function Get-LicenseStatus
     [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param(
-        [Microsoft.Management.Infrastructure.CimSession]$CimSession
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+        [Guid]$ActivationId
     )
 
-    $product = Get-WindowsLicensingProduct -CimSession $CimSession
+    $productParams = @{ CimSession = $CimSession }
+    if ($PSBoundParameters.ContainsKey('ActivationId')) { $productParams['ActivationId'] = $ActivationId }
+    $product = Get-WindowsLicensingProduct @productParams
     $status = [LicenseStatusCode]($product.LicenseStatus)
     $activated = $status -eq [LicenseStatusCode]::Licensed
     $result = [PSCustomObject]@{
