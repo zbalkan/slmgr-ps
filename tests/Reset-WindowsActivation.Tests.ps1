@@ -217,4 +217,30 @@ Describe 'Reset-WindowsActivation' {
             Should -Invoke Get-Session -Times 0
         }
     }
+
+    Context 'Batch failure containment' {
+        BeforeEach {
+            $script:ResetCall = 0
+            Mock Get-Session { $script:MockCimSession }
+            Mock Remove-CimSession {}
+            Mock Get-WindowsLicensingProduct {
+                $script:ResetCall++
+                if ($script:ResetCall -eq 1) { throw 'First reset failed' }
+                [PSCustomObject]@{ Name = 'Windows 11 Pro'; LicenseStatus = 1 }
+            }
+            Mock Invoke-SppCimMethod {}
+        }
+
+        It 'continues the computer batch and throws after processing all targets' {
+            { Reset-WindowsActivation -Computer WS01, WS02 -UninstallProductKey `
+                    -Confirm:$false -ErrorAction SilentlyContinue } |
+                Should -Throw -ExpectedMessage '*First reset failed*'
+
+            Should -Invoke Get-WindowsLicensingProduct -Times 2
+            Should -Invoke Remove-CimSession -Times 2
+            Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+                $MethodName -eq 'UninstallProductKey'
+            }
+        }
+    }
 }

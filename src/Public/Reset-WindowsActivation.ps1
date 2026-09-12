@@ -84,6 +84,7 @@ function Reset-WindowsActivation
     }
     Process
     {
+        $resetFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
         Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
         foreach ($c in $Computer)
         {
@@ -133,6 +134,11 @@ function Reset-WindowsActivation
                     $kmsTarget | Invoke-SppCimMethod -MethodName ClearKeyManagementServicePort
                 }
             }
+            catch
+            {
+                $resetFailures.Add($_)
+                Write-Error -ErrorRecord $_
+            }
             finally
             {
                 if ($null -ne $session)
@@ -140,6 +146,11 @@ function Reset-WindowsActivation
                     Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
                 }
             }
+        }
+
+        if ($resetFailures.Count -gt 0)
+        {
+            $PSCmdlet.ThrowTerminatingError($resetFailures[0])
         }
     }
 }
