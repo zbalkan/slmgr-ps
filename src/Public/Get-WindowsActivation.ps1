@@ -70,10 +70,19 @@ function Get-WindowsActivation
         [Parameter(ParameterSetName = 'Extended')]
         [Parameter(ParameterSetName = 'Expiry')]
         [Parameter(ParameterSetName = 'Offline')]
-        [Guid]$ActivationId
+        [Guid]$ActivationId,
+
+        [Parameter(ParameterSetName = 'Basic')]
+        [Parameter(ParameterSetName = 'Extended')]
+        [switch]$All
     )
     Begin
     {
+        if ($All.IsPresent -and $PSBoundParameters.ContainsKey('ActivationId'))
+        {
+            throw 'ActivationId and All cannot be used together.'
+        }
+
         $results = [System.Collections.Generic.List[PSCustomObject]]::new()
     }
     Process
@@ -85,33 +94,38 @@ function Get-WindowsActivation
             $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
             try
             {
-                $informationParams = @{ CimSession = $session; ErrorAction = 'Stop' }
+                $products = @()
                 if ($PSBoundParameters.ContainsKey('ActivationId'))
                 {
-                    $informationParams['Product'] = Get-WindowsLicensingProduct -CimSession $session `
-                        -ActivationId $ActivationId -ErrorAction Stop
+                    $products = @(Get-WindowsLicensingProduct -CimSession $session `
+                            -ActivationId $ActivationId -ErrorAction Stop)
+                }
+                elseif ($All.IsPresent)
+                {
+                    $products = @(Get-WindowsLicensingProduct -CimSession $session -All -ErrorAction Stop)
                 }
 
-                switch ($PSCmdlet.ParameterSetName)
+                $informationFunction = switch ($PSCmdlet.ParameterSetName)
                 {
-                    'Extended'
+                    'Extended' { 'Get-ExtendedLicenseInformation' }
+                    'Expiry' { 'Get-ExpiryInformation' }
+                    'Offline' { 'Get-OfflineInstallationId' }
+                    default { 'Get-BasicLicenseInformation' }
+                }
+
+                if ($products.Count -eq 0 -and -not $All.IsPresent)
+                {
+                    $result = & $informationFunction -CimSession $session -ErrorAction Stop
+                    $results.Add($result)
+                }
+                else
+                {
+                    foreach ($product in $products)
                     {
-                        $result = Get-ExtendedLicenseInformation @informationParams
-                    }
-                    'Expiry'
-                    {
-                        $result = Get-ExpiryInformation @informationParams
-                    }
-                    'Offline'
-                    {
-                        $result = Get-OfflineInstallationId @informationParams
-                    }
-                    default
-                    {
-                        $result = Get-BasicLicenseInformation @informationParams
+                        $result = & $informationFunction -CimSession $session -Product $product -ErrorAction Stop
+                        $results.Add($result)
                     }
                 }
-                $results.Add($result)
             }
             finally
             {

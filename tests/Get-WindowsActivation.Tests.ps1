@@ -51,4 +51,51 @@ Describe 'Get-WindowsActivation product targeting' {
 
         Should -Invoke Get-Session -ModuleName slmgr-ps -Times 0
     }
+
+    It 'formats every product returned by an all-products basic query' {
+        $products = @(
+            New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+            New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+        )
+        Mock Get-WindowsLicensingProduct -ModuleName slmgr-ps { $products }
+        Mock Get-BasicLicenseInformation -ModuleName slmgr-ps {
+            [PSCustomObject]@{ Product = $Product }
+        }
+
+        $result = @(Get-WindowsActivation -All)
+
+        $result.Count | Should -Be 2
+        $result[0].Product | Should -Be $products[0]
+        $result[1].Product | Should -Be $products[1]
+        Should -Invoke Get-WindowsLicensingProduct -ModuleName slmgr-ps -Times 1 -ParameterFilter {
+            $All -and $ErrorAction -eq 'Stop'
+        }
+        Should -Invoke Get-BasicLicenseInformation -ModuleName slmgr-ps -Times 2
+    }
+
+    It 'supports all-products enumeration in extended mode' {
+        $products = @(
+            New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+            New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+        )
+        Mock Get-WindowsLicensingProduct -ModuleName slmgr-ps { $products }
+
+        $result = @(Get-WindowsActivation -Extended -All)
+
+        $result.Count | Should -Be 2
+        Should -Invoke Get-ExtendedLicenseInformation -ModuleName slmgr-ps -Times 2
+    }
+
+    It 'rejects all-products enumeration with an activation ID before opening a session' {
+        { Get-WindowsActivation -All -ActivationId ([Guid]::NewGuid()) } |
+            Should -Throw -ExpectedMessage '*cannot be used together*'
+
+        Should -Invoke Get-Session -ModuleName slmgr-ps -Times 0
+    }
+
+    It 'does not expose all-products enumeration for expiry queries' {
+        { Get-WindowsActivation -Expiry -All } | Should -Throw
+
+        Should -Invoke Get-Session -ModuleName slmgr-ps -Times 0
+    }
 }
