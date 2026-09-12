@@ -216,6 +216,19 @@ Describe 'Reset-WindowsActivation' {
 
             Should -Invoke Get-Session -Times 0
         }
+
+        It 'clears product-scoped KMS settings before uninstalling the key' {
+            $script:MethodOrder = [System.Collections.Generic.List[string]]::new()
+            Mock Invoke-SppCimMethod { $script:MethodOrder.Add($MethodName) }
+
+            Reset-WindowsActivation -ClearKMSSettings -UninstallProductKey `
+                -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false
+
+            $script:MethodOrder.Count | Should -Be 3
+            $script:MethodOrder[0] | Should -Be 'ClearKeyManagementServiceMachine'
+            $script:MethodOrder[1] | Should -Be 'ClearKeyManagementServicePort'
+            $script:MethodOrder[2] | Should -Be 'UninstallProductKey'
+        }
     }
 
     Context 'Batch failure containment' {

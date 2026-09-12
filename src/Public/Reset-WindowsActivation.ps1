@@ -105,14 +105,6 @@ function Reset-WindowsActivation
                     $product = Get-WindowsLicensingProduct -CimSession $session -ActivationId $ActivationId
                 }
 
-                if ($UninstallProductKey.IsPresent)
-                {
-                    if ($null -eq $product) { $product = Get-WindowsLicensingProduct -CimSession $session }
-
-                    Write-Verbose 'Uninstalling product key (slmgr /upk)'
-                    $product | Invoke-SppCimMethod -MethodName UninstallProductKey
-                }
-
                 $requiresService = $ClearProductKeyFromRegistry.IsPresent
                 if ($ClearKMSSettings.IsPresent -and $null -eq $product) { $requiresService = $true }
                 if ($requiresService)
@@ -132,6 +124,16 @@ function Reset-WindowsActivation
                     $kmsTarget = if ($null -ne $product) { $product } else { $service }
                     $kmsTarget | Invoke-SppCimMethod -MethodName ClearKeyManagementServiceMachine
                     $kmsTarget | Invoke-SppCimMethod -MethodName ClearKeyManagementServicePort
+                }
+
+                # Uninstall last so combined product-scoped operations do not depend on a
+                # CIM instance after its installed key has been removed.
+                if ($UninstallProductKey.IsPresent)
+                {
+                    if ($null -eq $product) { $product = Get-WindowsLicensingProduct -CimSession $session }
+
+                    Write-Verbose 'Uninstalling product key (slmgr /upk)'
+                    $product | Invoke-SppCimMethod -MethodName UninstallProductKey
                 }
             }
             catch
