@@ -17,6 +17,8 @@ function Invoke-KMSActivation
     }
 
     $installRequested = $InstallKmsClientKey.IsPresent -or $PSBoundParameters.ContainsKey('ProductKey')
+    $kmsSettingsRequested = $PSBoundParameters.ContainsKey('KMSServerFQDN')
+    if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $kmsSettingsRequested = $true }
     $statusParams = @{ CimSession = $CimSession }
     if ($PSBoundParameters.ContainsKey('ActivationId')) { $statusParams['ActivationId'] = $ActivationId }
     $product = $null
@@ -28,7 +30,11 @@ function Invoke-KMSActivation
     {
         $licenseInfo = Get-LicenseStatus @statusParams
         Write-Verbose "License Status: $($licenseInfo.LicenseStatus)"
-        if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return }
+        if ($licenseInfo.Activated -and -not $kmsSettingsRequested)
+        {
+            Write-Warning 'The product is already activated.'
+            return
+        }
     }
 
     if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))

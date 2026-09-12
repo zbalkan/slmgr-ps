@@ -126,4 +126,16 @@ Describe 'Invoke-KMSActivation product-key installation' {
             $InputObject -eq $script:Product
         }
     }
+
+    It 'does not skip an explicit KMS client setting when already activated' {
+        Invoke-KMSActivation -CimSession $script:Session -Service $script:Service `
+            -KMSServerFQDN 'kms.example.com'
+
+        Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+            $MethodName -eq 'SetKeyManagementServiceMachine'
+        }
+        Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+            $MethodName -eq 'Activate'
+        }
+    }
 }
