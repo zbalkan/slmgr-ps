@@ -2,12 +2,13 @@
 
 <#
 .Synopsis
-Activates Windows via KMS
+Installs product keys or activates Windows
 .DESCRIPTION
 A drop in replacement for slmgr script. By default attempts KMS activation using the
 product key already installed on the machine. Use -UseKmsClientKey to also install the
 KMS client setup key (GVLK) for the detected OS edition before activating. This is a
-material licensing change and is therefore opt-in.
+material licensing change and is therefore opt-in. Use -ProductKey to install an
+explicit product key without activating it.
 .INPUTS
 string[]. You can pass the computer names
 .OUTPUTS
@@ -16,6 +17,8 @@ None if successful. Throws on error.
 Start-WindowsActivation -Verbose # Activates the local computer using its existing product key
 .EXAMPLE
 Start-WindowsActivation -UseKmsClientKey -Verbose # Installs the GVLK for the detected OS edition then activates
+.EXAMPLE
+Start-WindowsActivation -ProductKey XXXXX-XXXXX-XXXXX-XXXXX-XXXXX # Installs an explicit product key without activating
 .EXAMPLE
 Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Activates WS01 over WinRM
 .EXAMPLE
@@ -46,6 +49,7 @@ function Start-WindowsActivation
         [Parameter(ParameterSetName = 'ActivateWithKMS')]
         [Parameter(ParameterSetName = 'Rearm')]
         [Parameter(ParameterSetName = 'Offline')]
+        [Parameter(ParameterSetName = 'InstallProductKey')]
         [AllowNull()]
         [string[]]
         $Computer = @('localhost'),
@@ -58,6 +62,7 @@ function Start-WindowsActivation
         [Parameter(ParameterSetName = 'ActivateWithKMS')]
         [Parameter(ParameterSetName = 'Rearm')]
         [Parameter(ParameterSetName = 'Offline')]
+        [Parameter(ParameterSetName = 'InstallProductKey')]
         [AllowNull()]
         [PSCredential]
         $Credentials,
@@ -122,6 +127,14 @@ function Start-WindowsActivation
         [switch]
         $UseKmsClientKey,
 
+        [Parameter(Mandatory = $true,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
+            ParameterSetName = 'InstallProductKey')]
+        [string]
+        $ProductKey,
+
         [Parameter(Mandatory = $false,
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
@@ -152,13 +165,30 @@ function Start-WindowsActivation
         $ConfirmationId
 
     )
+    Begin
+    {
+        $isProductKeyInstall = $PSCmdlet.ParameterSetName -eq 'InstallProductKey'
+        $hasInvalidProductKey = $ProductKey -notmatch '^[A-Za-z0-9]{5}(?:-[A-Za-z0-9]{5}){4}$'
+        if ($isProductKeyInstall -and $hasInvalidProductKey)
+        {
+            throw 'ProductKey must contain five groups of five alphanumeric characters separated by dashes.'
+        }
+    }
     Process
     {
         $activationFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
         Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
         foreach ($c in $Computer)
         {
-            if (-not $pscmdlet.ShouldProcess($c, "Activate Windows ($($PSCmdlet.ParameterSetName))"))
+            $action = if ($PSCmdlet.ParameterSetName -eq 'InstallProductKey')
+            {
+                'Install Windows product key'
+            }
+            else
+            {
+                "Activate Windows ($($PSCmdlet.ParameterSetName))"
+            }
+            if (-not $pscmdlet.ShouldProcess($c, $action))
             {
                 continue
             }
@@ -184,6 +214,12 @@ function Start-WindowsActivation
                     {
                         Write-Verbose 'Initiating ReArm operation'
                         Invoke-Rearm -CimSession $session -Service $service
+                    }
+
+                    'InstallProductKey'
+                    {
+                        Write-Verbose 'Initiating product key installation'
+                        Invoke-ProductKeyInstallation -Service $service -ProductKey $ProductKey
                     }
 
                     'ActivateWithKMS'
