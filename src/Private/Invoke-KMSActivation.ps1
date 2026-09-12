@@ -6,12 +6,22 @@ function Invoke-KMSActivation
         [CimInstance]$Service,
         [string]$KMSServerFQDN,
         [int]$KMSServerPort,
-        [switch]$InstallKmsClientKey
+        [switch]$InstallKmsClientKey,
+        [string]$ProductKey
     )
 
-    $licenseInfo = Get-LicenseStatus -CimSession $CimSession
-    Write-Verbose "License Status: $($licenseInfo.LicenseStatus)"
-    if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return }
+    if ($InstallKmsClientKey.IsPresent -and $PSBoundParameters.ContainsKey('ProductKey'))
+    {
+        throw 'InstallKmsClientKey and ProductKey cannot be used together.'
+    }
+
+    $installRequested = $InstallKmsClientKey.IsPresent -or $PSBoundParameters.ContainsKey('ProductKey')
+    if (-not $installRequested)
+    {
+        $licenseInfo = Get-LicenseStatus -CimSession $CimSession
+        Write-Verbose "License Status: $($licenseInfo.LicenseStatus)"
+        if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return }
+    }
 
     if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
     {
@@ -26,21 +36,26 @@ function Invoke-KMSActivation
         $Service | Invoke-SppCimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $KMSServerPort }
     }
 
-    if ($InstallKmsClientKey.IsPresent)
+    if ($installRequested)
     {
-        $productKey = Get-KMSKey -CimSession $CimSession
-        if ($productKey -eq 'Unknown')
+        $keyToInstall = $ProductKey
+        if ($InstallKmsClientKey.IsPresent)
         {
-            throw 'No KMS client setup key is available for this OS edition. Provide a product key manually or use a recognised edition.'
+            $keyToInstall = Get-KMSKey -CimSession $CimSession
+            if ($keyToInstall -eq 'Unknown')
+            {
+                throw 'No KMS client setup key is available for this OS edition. Provide a product key manually or use a recognised edition.'
+            }
         }
-        Write-Verbose 'Installing KMS client setup key'
-        $Service | Invoke-SppCimMethod -MethodName InstallProductKey -Arguments @{ ProductKey = $productKey }
+
+        Write-Verbose 'Installing product key'
+        $Service | Invoke-SppCimMethod -MethodName InstallProductKey -Arguments @{ ProductKey = $keyToInstall }
         Start-Sleep -Seconds 10 # Installing product key takes time.
         $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
         Start-Sleep -Seconds 2
     }
 
-    # Trigger KMS network check-in via SoftwareLicensingProduct.Activate()
+    # Activate the product selected after any requested key installation.
     $product = Get-WindowsLicensingProduct -CimSession $CimSession
     $product | Invoke-SppCimMethod -MethodName Activate
     $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus

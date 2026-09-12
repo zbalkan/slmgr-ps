@@ -4,7 +4,6 @@ BeforeAll {
     function Get-Session {}
     function Invoke-OfflineActivation {}
     function Invoke-KMSActivation {}
-    function Invoke-ProductKeyInstallation {}
 
     $script:MockCimSession = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
     $script:Service = New-CimInstance -ClassName SoftwareLicensingService -ClientOnly
@@ -17,7 +16,6 @@ Describe 'Start-WindowsActivation' {
         Mock Get-CimInstance { $script:Service }
         Mock Remove-CimSession {}
         Mock Invoke-KMSActivation {}
-        Mock Invoke-ProductKeyInstallation {}
         Mock Invoke-OfflineActivation {
             $script:OfflineCall++
             if ($script:OfflineCall -eq 1)
@@ -45,15 +43,14 @@ Describe 'Start-WindowsActivation' {
         Should -Invoke Remove-CimSession -Times 1
     }
 
-    It 'forwards an explicit product key to the installation helper' {
+    It 'forwards an explicit product key to the activation helper' {
         $productKey = 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE'
 
         Start-WindowsActivation -Computer WS01 -ProductKey $productKey -Confirm:$false
 
-        Should -Invoke Invoke-ProductKeyInstallation -Times 1 -ParameterFilter {
+        Should -Invoke Invoke-KMSActivation -Times 1 -ParameterFilter {
             $ProductKey -eq 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE'
         }
-        Should -Invoke Invoke-KMSActivation -Times 0
     }
 
     It 'rejects a malformed product key before opening a session' {
@@ -67,12 +64,12 @@ Describe 'Start-WindowsActivation' {
         Start-WindowsActivation -ProductKey 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE' -WhatIf
 
         Should -Invoke Get-Session -Times 0
-        Should -Invoke Invoke-ProductKeyInstallation -Times 0
+        Should -Invoke Invoke-KMSActivation -Times 0
     }
 
     It 'rejects an explicit product key combined with automatic KMS key selection' {
         { Start-WindowsActivation -ProductKey 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE' `
-                -UseKmsClientKey -Confirm:$false } | Should -Throw
+                -UseKmsClientKey -Confirm:$false } | Should -Throw -ExpectedMessage '*cannot be used together*'
 
         Should -Invoke Get-Session -Times 0
     }
