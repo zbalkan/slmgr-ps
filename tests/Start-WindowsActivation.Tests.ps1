@@ -34,6 +34,15 @@ Describe 'Start-WindowsActivation' {
         Should -Invoke Remove-CimSession -Times 2
     }
 
+    It 'processes the full batch before honoring ErrorAction Stop' {
+        { Start-WindowsActivation -Computer WS01, WS02 -Offline -ConfirmationId ('1' * 54) `
+                -Confirm:$false -ErrorAction Stop } |
+            Should -Throw -ExpectedMessage '*Offline activation failed*'
+
+        Should -Invoke Invoke-OfflineActivation -Times 2
+        Should -Invoke Remove-CimSession -Times 2
+    }
+
     It 'throws after a single-computer activation failure' {
         { Start-WindowsActivation -Computer WS01 -Offline -ConfirmationId ('1' * 54) `
                 -Confirm:$false -ErrorAction SilentlyContinue } |

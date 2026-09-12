@@ -242,5 +242,17 @@ Describe 'Reset-WindowsActivation' {
                 $MethodName -eq 'UninstallProductKey'
             }
         }
+
+        It 'processes the full batch before honoring ErrorAction Stop' {
+            { Reset-WindowsActivation -Computer WS01, WS02 -UninstallProductKey `
+                    -Confirm:$false -ErrorAction Stop } |
+                Should -Throw -ExpectedMessage '*First reset failed*'
+
+            Should -Invoke Get-WindowsLicensingProduct -Times 2
+            Should -Invoke Remove-CimSession -Times 2
+            Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+                $MethodName -eq 'UninstallProductKey'
+            }
+        }
     }
 }
