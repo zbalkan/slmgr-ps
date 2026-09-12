@@ -4,11 +4,11 @@
 .Synopsis
 Installs product keys or activates Windows
 .DESCRIPTION
-A drop in replacement for slmgr script. By default attempts KMS activation using the
-product key already installed on the machine. Use -UseKmsClientKey to also install the
+A drop in replacement for slmgr script. By default attempts activation using the product
+key already installed on the machine. Use -UseKmsClientKey to also install the
 KMS client setup key (GVLK) for the detected OS edition before activating. This is a
 material licensing change and is therefore opt-in. Use -ProductKey to install an
-explicit product key without activating it.
+explicit product key before activating it in the same operation.
 .INPUTS
 string[]. You can pass the computer names
 .OUTPUTS
@@ -18,7 +18,7 @@ Start-WindowsActivation -Verbose # Activates the local computer using its existi
 .EXAMPLE
 Start-WindowsActivation -UseKmsClientKey -Verbose # Installs the GVLK for the detected OS edition then activates
 .EXAMPLE
-Start-WindowsActivation -ProductKey XXXXX-XXXXX-XXXXX-XXXXX-XXXXX # Installs an explicit product key without activating
+Start-WindowsActivation -ProductKey XXXXX-XXXXX-XXXXX-XXXXX-XXXXX # Installs an explicit product key then activates
 .EXAMPLE
 Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Activates WS01 over WinRM
 .EXAMPLE
@@ -49,7 +49,6 @@ function Start-WindowsActivation
         [Parameter(ParameterSetName = 'ActivateWithKMS')]
         [Parameter(ParameterSetName = 'Rearm')]
         [Parameter(ParameterSetName = 'Offline')]
-        [Parameter(ParameterSetName = 'InstallProductKey')]
         [AllowNull()]
         [string[]]
         $Computer = @('localhost'),
@@ -62,7 +61,6 @@ function Start-WindowsActivation
         [Parameter(ParameterSetName = 'ActivateWithKMS')]
         [Parameter(ParameterSetName = 'Rearm')]
         [Parameter(ParameterSetName = 'Offline')]
-        [Parameter(ParameterSetName = 'InstallProductKey')]
         [AllowNull()]
         [PSCredential]
         $Credentials,
@@ -127,11 +125,11 @@ function Start-WindowsActivation
         [switch]
         $UseKmsClientKey,
 
-        [Parameter(Mandatory = $true,
+        [Parameter(Mandatory = $false,
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
             ValueFromRemainingArguments = $false,
-            ParameterSetName = 'InstallProductKey')]
+            ParameterSetName = 'ActivateWithKMS')]
         [string]
         $ProductKey,
 
@@ -167,9 +165,13 @@ function Start-WindowsActivation
     )
     Begin
     {
-        $isProductKeyInstall = $PSCmdlet.ParameterSetName -eq 'InstallProductKey'
+        if ($UseKmsClientKey.IsPresent -and $PSBoundParameters.ContainsKey('ProductKey'))
+        {
+            throw 'UseKmsClientKey and ProductKey cannot be used together.'
+        }
+        $hasProductKey = $PSBoundParameters.ContainsKey('ProductKey')
         $hasInvalidProductKey = $ProductKey -notmatch '^[A-Za-z0-9]{5}(?:-[A-Za-z0-9]{5}){4}$'
-        if ($isProductKeyInstall -and $hasInvalidProductKey)
+        if ($hasProductKey -and $hasInvalidProductKey)
         {
             throw 'ProductKey must contain five groups of five alphanumeric characters separated by dashes.'
         }
@@ -180,15 +182,7 @@ function Start-WindowsActivation
         Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
         foreach ($c in $Computer)
         {
-            $action = if ($PSCmdlet.ParameterSetName -eq 'InstallProductKey')
-            {
-                'Install Windows product key'
-            }
-            else
-            {
-                "Activate Windows ($($PSCmdlet.ParameterSetName))"
-            }
-            if (-not $pscmdlet.ShouldProcess($c, $action))
+            if (-not $pscmdlet.ShouldProcess($c, 'Activate Windows'))
             {
                 continue
             }
@@ -216,12 +210,6 @@ function Start-WindowsActivation
                         Invoke-Rearm -CimSession $session -Service $service
                     }
 
-                    'InstallProductKey'
-                    {
-                        Write-Verbose 'Initiating product key installation'
-                        Invoke-ProductKeyInstallation -Service $service -ProductKey $ProductKey
-                    }
-
                     'ActivateWithKMS'
                     {
                         if ($CacheDisabled.IsPresent)
@@ -230,11 +218,12 @@ function Start-WindowsActivation
                             $service | Invoke-SppCimMethod -MethodName DisableKeyManagementServiceHostCaching
                         }
 
-                        Write-Verbose 'Initiating KMS activation operation'
+                        Write-Verbose 'Initiating Windows activation operation'
                         $kmsParams = @{ CimSession = $session; Service = $service }
                         if ($PSBoundParameters.ContainsKey('KMSServerFQDN')) { $kmsParams['KMSServerFQDN'] = $KMSServerFQDN }
                         if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $kmsParams['KMSServerPort'] = $KMSServerPort }
                         if ($UseKmsClientKey.IsPresent) { $kmsParams['InstallKmsClientKey'] = $true }
+                        if ($PSBoundParameters.ContainsKey('ProductKey')) { $kmsParams['ProductKey'] = $ProductKey }
                         Invoke-KMSActivation @kmsParams
                     }
 
