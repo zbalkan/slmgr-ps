@@ -1,39 +1,123 @@
 function Get-WindowsLicensingProduct
 {
     [OutputType([CimInstance])]
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'DefaultMutation')]
     param(
-        [Microsoft.Management.Infrastructure.CimSession]$CimSession
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+
+        [Parameter(Mandatory, ParameterSetName = 'DefaultRead')]
+        [switch]$ForRead,
+
+        [Parameter(Mandatory, ParameterSetName = 'ByActivationId')]
+        [Guid]$ActivationId,
+
+        [Parameter(Mandatory, ParameterSetName = 'All')]
+        [switch]$All,
+
+        [Parameter(ParameterSetName = 'ByActivationId')]
+        [switch]$RequireProductKey
     )
 
-    # ApplicationID '55c92734-d682-4d71-983e-d6ec3f16059f' is the Windows OS licensing application.
-    # PartialProductKey IS NOT NULL ensures a product key is actually installed (excludes evaluation stubs).
-    $query = "SELECT Name, Description, ID, ApplicationID, ProductKeyID, ProductKeyChannel,
-    OfflineInstallationId, UseLicenseURL, ValidationURL, PartialProductKey,
-    LicenseStatus, GracePeriodRemaining, RemainingAppReArmCount, RemainingSkuReArmCount, TrustedTime
-    FROM SoftwareLicensingProduct
-    WHERE ApplicationID = '55c92734-d682-4d71-983e-d6ec3f16059f'
-    AND PartialProductKey IS NOT NULL"
+    $properties = @(
+        'Name', 'Description', 'ID', 'ApplicationID', 'LicenseIsAddon',
+        'ProductKeyID', 'ProductKeyChannel', 'OfflineInstallationId',
+        'UseLicenseURL', 'ValidationURL', 'PartialProductKey', 'LicenseStatus',
+        'GracePeriodRemaining', 'RemainingAppReArmCount',
+        'RemainingSkuReArmCount', 'TrustedTime'
+    )
+    $query = "SELECT $($properties -join ', ') FROM SoftwareLicensingProduct"
+
+    $windowsApplicationId = '55c92734-d682-4d71-983e-d6ec3f16059f'
+    $whereClauses = switch ($PSCmdlet.ParameterSetName)
+    {
+        'ByActivationId'
+        {
+            $clauses = @("ID = '$($ActivationId.ToString())'")
+            if ($RequireProductKey.IsPresent) { $clauses += 'PartialProductKey IS NOT NULL' }
+            $clauses
+        }
+        'All' { @() }
+        'DefaultRead'
+        {
+            @(
+                "ApplicationID = '$windowsApplicationId'"
+                'PartialProductKey IS NOT NULL'
+            )
+        }
+        default
+        {
+            @(
+                "ApplicationID = '$windowsApplicationId'"
+                'PartialProductKey IS NOT NULL'
+                'LicenseIsAddon = FALSE'
+            )
+        }
+    }
+
+    if ($whereClauses.Count -gt 0)
+    {
+        $query += " WHERE $($whereClauses -join ' AND ')"
+    }
 
     $candidates = @(Get-CimInstance -CimSession $CimSession -Query $query -ErrorAction Stop)
 
-    if ($candidates.Count -eq 0)
+    if ($PSCmdlet.ParameterSetName -eq 'All')
+    {
+        return $candidates | Sort-Object ApplicationID, Name, ID
+    }
+
+    if ($PSCmdlet.ParameterSetName -eq 'ByActivationId')
+    {
+        if ($candidates.Count -eq 0)
+        {
+            throw "Licensing product with activation ID $ActivationId was not found."
+        }
+        if ($candidates.Count -ne 1)
+        {
+            throw "Multiple licensing products returned for activation ID $ActivationId."
+        }
+        return $candidates[0]
+    }
+
+    $baseCandidates = @($candidates | Where-Object { $_.LicenseIsAddon -ne $true })
+    if ($baseCandidates.Count -eq 0)
     {
         throw 'No Windows licensing product with an installed product key was found. The system may be running an evaluation edition or have no key installed.'
     }
 
-    if ($candidates.Count -eq 1)
+    if ($baseCandidates.Count -eq 1)
     {
-        return $candidates[0]
+        $selectedProduct = $baseCandidates[0]
+    }
+    else
+    {
+        # Multiple products can appear after in-place upgrades. Prefer Licensed, then any active state.
+        $licensed = @($baseCandidates | Where-Object { $_.LicenseStatus -eq 1 })
+        if ($licensed.Count -eq 1)
+        {
+            $selectedProduct = $licensed[0]
+        }
+        else
+        {
+            $active = @($baseCandidates | Where-Object { $_.LicenseStatus -ne 0 })
+            if ($active.Count -eq 1) { $selectedProduct = $active[0] }
+        }
     }
 
-    # Multiple products can appear after in-place upgrades. Prefer Licensed, then any active state.
-    $licensed = @($candidates | Where-Object { $_.LicenseStatus -eq 1 })
-    if ($licensed.Count -eq 1) { return $licensed[0] }
+    if ($null -eq $selectedProduct)
+    {
+        $summary = ($baseCandidates | ForEach-Object {
+                $id = if ($null -eq $_.ID) { '<unknown>' } else { $_.ID }
+                "'$($_.Name)' ($id, status $($_.LicenseStatus))"
+            }) -join ', '
+        throw "Multiple Windows licensing products found and none can be selected unambiguously: $summary. Remove duplicate product registrations or specify an activation ID."
+    }
 
-    $active = @($candidates | Where-Object { $_.LicenseStatus -ne 0 })
-    if ($active.Count -eq 1) { return $active[0] }
+    if ($PSCmdlet.ParameterSetName -eq 'DefaultRead')
+    {
+        $addOns = @($candidates | Where-Object { $_.LicenseIsAddon -eq $true })
+        return (@($selectedProduct) + $addOns) | Sort-Object ApplicationID, Name, ID
+    }
 
-    $summary = ($candidates | ForEach-Object { "'$($_.Name)' (status $($_.LicenseStatus))" }) -join ', '
-    throw "Multiple Windows licensing products found and none can be selected unambiguously: $summary. Remove duplicate product registrations or contact your administrator."
+    return $selectedProduct
 }
