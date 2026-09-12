@@ -259,7 +259,6 @@ function Start-WindowsActivation
             catch
             {
                 $activationFailures.Add($_)
-                Write-Error -ErrorRecord $_
             }
             finally
             {
@@ -272,6 +271,10 @@ function Start-WindowsActivation
 
         if ($activationFailures.Count -gt 0)
         {
+            foreach ($failure in $activationFailures)
+            {
+                Write-Error -ErrorRecord $failure
+            }
             $PSCmdlet.ThrowTerminatingError($activationFailures[0])
         }
     }
