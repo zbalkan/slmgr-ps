@@ -10,27 +10,31 @@ function Invoke-SppCimMethod
     )
     Process
     {
-        $methodClasses = @{
-            Activate                               = @('SoftwareLicensingProduct')
-            ClearKeyManagementServiceMachine       = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
-            ClearKeyManagementServicePort          = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
-            ClearProductKeyFromRegistry            = @('SoftwareLicensingService')
-            DepositOfflineConfirmationId           = @('SoftwareLicensingProduct')
-            DisableKeyManagementServiceHostCaching = @('SoftwareLicensingService')
-            InstallProductKey                      = @('SoftwareLicensingService')
-            ReArmWindows                           = @('SoftwareLicensingService')
-            RefreshLicenseStatus                   = @('SoftwareLicensingService')
-            SetKeyManagementServiceMachine         = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
-            SetKeyManagementServicePort            = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
-            UninstallProductKey                    = @('SoftwareLicensingProduct')
+        $methodContract = (Get-SppContract).Methods[$MethodName]
+        if ($null -eq $methodContract)
+        {
+            throw "Unsupported SPP method: $MethodName"
         }
 
         $className = $InputObject.CimClass.CimClassName
-        $allowedClasses = $methodClasses[$MethodName]
+        $allowedClasses = $methodContract.Classes
 
-        if ($null -ne $allowedClasses -and $className -notin $allowedClasses)
+        if ($className -notin $allowedClasses)
         {
             throw "$MethodName requires $($allowedClasses -join ' or '), but received $className"
+        }
+
+        $suppliedArguments = if ($null -eq $Arguments) { @() } else { @($Arguments.Keys) }
+        $missingArguments = @($methodContract.Arguments | Where-Object { $_ -notin $suppliedArguments })
+        $unexpectedArguments = @($suppliedArguments | Where-Object { $_ -notin $methodContract.Arguments })
+
+        if ($missingArguments.Count -gt 0)
+        {
+            throw "$MethodName requires argument(s): $($missingArguments -join ', ')"
+        }
+        if ($unexpectedArguments.Count -gt 0)
+        {
+            throw "$MethodName does not accept argument(s): $($unexpectedArguments -join ', ')"
         }
 
         $invokeParams = @{ MethodName = $MethodName }

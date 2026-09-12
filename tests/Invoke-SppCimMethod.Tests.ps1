@@ -1,4 +1,5 @@
 BeforeAll {
+    . $PSScriptRoot/../src/Private/Get-SppContract.ps1
     . $PSScriptRoot/../src/Private/Invoke-SppCimMethod.ps1
 
     $script:Service = New-CimInstance -ClassName SoftwareLicensingService -ClientOnly
@@ -47,5 +48,46 @@ Describe 'Invoke-SppCimMethod' {
         Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = 5 } }
         { $script:Product | Invoke-SppCimMethod -MethodName Activate } |
             Should -Throw -ExpectedMessage '*return value: 5*'
+    }
+
+    It 'forwards the product key with the provider argument name' {
+        $script:Service | Invoke-SppCimMethod -MethodName InstallProductKey `
+            -Arguments @{ ProductKey = 'XXXXX-XXXXX-XXXXX-XXXXX-XXXXX' }
+
+        Should -Invoke Invoke-CimMethod -ParameterFilter {
+            $MethodName -eq 'InstallProductKey' -and
+            $Arguments.ProductKey -eq 'XXXXX-XXXXX-XXXXX-XXXXX-XXXXX'
+        } -Times 1
+    }
+
+    It 'forwards both offline activation arguments' {
+        $script:Product | Invoke-SppCimMethod -MethodName DepositOfflineConfirmationId -Arguments @{
+            InstallationId = '123456789'
+            ConfirmationId = '987654321'
+        }
+
+        Should -Invoke Invoke-CimMethod -ParameterFilter {
+            $MethodName -eq 'DepositOfflineConfirmationId' -and
+            $Arguments.InstallationId -eq '123456789' -and
+            $Arguments.ConfirmationId -eq '987654321'
+        } -Times 1
+    }
+
+    It 'rejects a missing provider argument' {
+        { $script:Service | Invoke-SppCimMethod -MethodName InstallProductKey } |
+            Should -Throw -ExpectedMessage '*requires argument(s): ProductKey*'
+        Should -Invoke Invoke-CimMethod -Times 0
+    }
+
+    It 'rejects an unexpected provider argument' {
+        { $script:Product | Invoke-SppCimMethod -MethodName Activate -Arguments @{ Force = $true } } |
+            Should -Throw -ExpectedMessage '*does not accept argument(s): Force*'
+        Should -Invoke Invoke-CimMethod -Times 0
+    }
+
+    It 'rejects a method outside the supported contract' {
+        { $script:Service | Invoke-SppCimMethod -MethodName UnknownMethod } |
+            Should -Throw -ExpectedMessage '*Unsupported SPP method*'
+        Should -Invoke Invoke-CimMethod -Times 0
     }
 }
