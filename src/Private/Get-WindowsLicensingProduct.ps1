@@ -14,6 +14,10 @@ function Get-WindowsLicensingProduct
         [Parameter(Mandatory, ParameterSetName = 'All')]
         [switch]$All,
 
+        [Parameter(Mandatory, ParameterSetName = 'ByPartialProductKey')]
+        [ValidatePattern('^[A-Za-z0-9]{5}$')]
+        [string]$PartialProductKey,
+
         [Parameter(ParameterSetName = 'ByActivationId')]
         [switch]$RequireProductKey
     )
@@ -37,6 +41,14 @@ function Get-WindowsLicensingProduct
             $clauses
         }
         'All' { @() }
+        'ByPartialProductKey'
+        {
+            @(
+                "ApplicationID = '$windowsApplicationId'"
+                "PartialProductKey = '$($PartialProductKey.ToUpperInvariant())'"
+                'LicenseIsAddon = FALSE'
+            )
+        }
         'DefaultRead'
         {
             @(
@@ -75,6 +87,19 @@ function Get-WindowsLicensingProduct
         if ($candidates.Count -ne 1)
         {
             throw "Multiple licensing products returned for activation ID $ActivationId."
+        }
+        return $candidates[0]
+    }
+
+    if ($PSCmdlet.ParameterSetName -eq 'ByPartialProductKey')
+    {
+        if ($candidates.Count -eq 0)
+        {
+            throw "Windows licensing product with partial product key $PartialProductKey was not found after installation."
+        }
+        if ($candidates.Count -ne 1)
+        {
+            throw "Multiple Windows licensing products have partial product key $PartialProductKey; activation cannot continue safely."
         }
         return $candidates[0]
     }
