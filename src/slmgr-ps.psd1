@@ -107,7 +107,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'Added explicit product-key installation with activation, activation-ID targeting across client queries and mutations, all-product information views, product-specific KMS client settings, and batch-safe reset handling.'
+            ReleaseNotes = 'Added explicit product-key installation with deterministic product selection and activation verification, activation-ID targeting across client queries and mutations, all-product information views, product-specific KMS client settings, input validation, and batch-safe activation and reset error handling.'
 
             # External dependent modules of this module
             # ExternalModuleDependencies = ''
