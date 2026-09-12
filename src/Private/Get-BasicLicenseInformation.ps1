@@ -3,16 +3,22 @@ function Get-BasicLicenseInformation
     [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param (
-        [Microsoft.Management.Infrastructure.CimSession]$CimSession
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+        [CimInstance]$Product
     )
 
-    $product = Get-WindowsLicensingProduct -CimSession $CimSession
+    if ($null -eq $Product)
+    {
+        $Product = Get-WindowsLicensingProduct -CimSession $CimSession
+    }
 
     $result = [PSCustomObject]@{
-        Name              = $product.Name
-        Description       = $product.Description
-        PartialProductKey = $product.PartialProductKey
-        LicenseStatus     = [LicenseStatusCode]($product.LicenseStatus)
+        Name              = $Product.Name
+        Description       = $Product.Description
+        ActivationId      = $Product.ID
+        ApplicationId     = $Product.ApplicationID
+        PartialProductKey = $Product.PartialProductKey
+        LicenseStatus     = [LicenseStatusCode]($Product.LicenseStatus)
     }
     return $result
 }

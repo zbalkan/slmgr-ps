@@ -3,14 +3,18 @@ function Get-ExpiryInformation
     [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param (
-        [Microsoft.Management.Infrastructure.CimSession]$CimSession
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+        [CimInstance]$Product
     )
 
-    $product = Get-WindowsLicensingProduct -CimSession $CimSession
-    $status = [LicenseStatusCode]($product.LicenseStatus)
-    $graceRemaining = $product.GracePeriodRemaining
+    if ($null -eq $Product)
+    {
+        $Product = Get-WindowsLicensingProduct -CimSession $CimSession
+    }
+    $status = [LicenseStatusCode]($Product.LicenseStatus)
+    $graceRemaining = $Product.GracePeriodRemaining
 
-    $expirationInfo = switch ($product.LicenseStatus)
+    $expirationInfo = switch ($Product.LicenseStatus)
     {
         0 { [LicenseStatusCode]::Unlicensed.ToString() }
         1
@@ -22,11 +26,11 @@ function Get-ExpiryInformation
             else
             {
                 $endDate = (Get-Date).AddMinutes($graceRemaining)
-                if ($product.Description -imatch 'TIMEBASED_')
+                if ($Product.Description -imatch 'TIMEBASED_')
                 {
                     "Timebased activation will expire $endDate"
                 }
-                elseif ($product.Description -imatch 'VIRTUAL_MACHINE_ACTIVATION')
+                elseif ($Product.Description -imatch 'VIRTUAL_MACHINE_ACTIVATION')
                 {
                     "Automatic VM activation will expire $endDate"
                 }
@@ -45,7 +49,9 @@ function Get-ExpiryInformation
     }
 
     $result = [PSCustomObject]@{
-        Name           = $product.Name
+        Name           = $Product.Name
+        ActivationId   = $Product.ID
+        ApplicationId  = $Product.ApplicationID
         LicenseStatus  = $status
         ExpirationInfo = $expirationInfo
     }
