@@ -7,7 +7,8 @@ function Invoke-KMSActivation
         [string]$KMSServerFQDN,
         [int]$KMSServerPort,
         [switch]$InstallKmsClientKey,
-        [string]$ProductKey
+        [string]$ProductKey,
+        [Guid]$ActivationId
     )
 
     if ($InstallKmsClientKey.IsPresent -and $PSBoundParameters.ContainsKey('ProductKey'))
@@ -16,9 +17,11 @@ function Invoke-KMSActivation
     }
 
     $installRequested = $InstallKmsClientKey.IsPresent -or $PSBoundParameters.ContainsKey('ProductKey')
+    $statusParams = @{ CimSession = $CimSession }
+    if ($PSBoundParameters.ContainsKey('ActivationId')) { $statusParams['ActivationId'] = $ActivationId }
     if (-not $installRequested)
     {
-        $licenseInfo = Get-LicenseStatus -CimSession $CimSession
+        $licenseInfo = Get-LicenseStatus @statusParams
         Write-Verbose "License Status: $($licenseInfo.LicenseStatus)"
         if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return }
     }
@@ -56,11 +59,13 @@ function Invoke-KMSActivation
     }
 
     # Activate the product selected after any requested key installation.
-    $product = Get-WindowsLicensingProduct -CimSession $CimSession
+    $productParams = @{ CimSession = $CimSession }
+    if ($PSBoundParameters.ContainsKey('ActivationId')) { $productParams['ActivationId'] = $ActivationId }
+    $product = Get-WindowsLicensingProduct @productParams
     $product | Invoke-SppCimMethod -MethodName Activate
     $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
 
-    $license = Get-LicenseStatus -CimSession $CimSession
+    $license = Get-LicenseStatus @statusParams
     if ($license.Activated)
     {
         Write-Verbose "The computer activated successfully. Current status: $($license.LicenseStatus)"
