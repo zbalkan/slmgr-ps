@@ -137,7 +137,6 @@ function Reset-WindowsActivation
             catch
             {
                 $resetFailures.Add($_)
-                Write-Error -ErrorRecord $_
             }
             finally
             {
@@ -150,6 +149,10 @@ function Reset-WindowsActivation
 
         if ($resetFailures.Count -gt 0)
         {
+            foreach ($failure in $resetFailures)
+            {
+                Write-Error -ErrorRecord $failure
+            }
             $PSCmdlet.ThrowTerminatingError($resetFailures[0])
         }
     }
