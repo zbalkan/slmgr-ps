@@ -100,4 +100,20 @@ Describe 'Start-WindowsActivation' {
             $ActivationId -eq $activationId
         }
     }
+
+    It 'rejects an explicit key combined with activation ID before opening a session' {
+        { Start-WindowsActivation -ProductKey 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE' `
+                -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false } |
+            Should -Throw -ExpectedMessage '*InstallProductKey is service-scoped*'
+
+        Should -Invoke Get-Session -Times 0
+    }
+
+    It 'rejects automatic KMS key installation combined with activation ID' {
+        { Start-WindowsActivation -UseKmsClientKey `
+                -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false } |
+            Should -Throw -ExpectedMessage '*InstallProductKey is service-scoped*'
+
+        Should -Invoke Get-Session -Times 0
+    }
 }

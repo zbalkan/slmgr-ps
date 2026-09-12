@@ -17,6 +17,10 @@ function Invoke-KMSActivation
     }
 
     $installRequested = $InstallKmsClientKey.IsPresent -or $PSBoundParameters.ContainsKey('ProductKey')
+    if ($installRequested -and $PSBoundParameters.ContainsKey('ActivationId'))
+    {
+        throw 'ActivationId cannot be combined with product-key installation because InstallProductKey is service-scoped.'
+    }
     $kmsSettingsRequested = $PSBoundParameters.ContainsKey('KMSServerFQDN')
     if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $kmsSettingsRequested = $true }
     $statusParams = @{ CimSession = $CimSession }

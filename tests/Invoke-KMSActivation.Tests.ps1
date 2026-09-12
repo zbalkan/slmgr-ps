@@ -74,6 +74,17 @@ Describe 'Invoke-KMSActivation product-key installation' {
         Should -Invoke Invoke-SppCimMethod -Times 0
     }
 
+    It 'rejects service-scoped key installation combined with product targeting' {
+        { Invoke-KMSActivation -CimSession $script:Session -Service $script:Service `
+                -ProductKey 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE' `
+                -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' } |
+            Should -Throw -ExpectedMessage '*InstallProductKey is service-scoped*'
+
+        Should -Invoke Get-WindowsLicensingProduct -Times 0
+        Should -Invoke Get-LicenseStatus -Times 0
+        Should -Invoke Invoke-SppCimMethod -Times 0
+    }
+
     It 'resolves, activates, and verifies the requested activation ID' {
         $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         $script:StatusCall = 0
