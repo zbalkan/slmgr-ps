@@ -104,6 +104,10 @@ function Get-WindowsActivation
                 {
                     $products = @(Get-WindowsLicensingProduct -CimSession $session -All -ErrorAction Stop)
                 }
+                elseif ($PSCmdlet.ParameterSetName -in @('Basic', 'Extended'))
+                {
+                    $products = @(Get-WindowsLicensingProduct -CimSession $session -ForRead -ErrorAction Stop)
+                }
 
                 $informationFunction = switch ($PSCmdlet.ParameterSetName)
                 {

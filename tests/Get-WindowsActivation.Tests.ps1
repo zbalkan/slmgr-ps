@@ -98,4 +98,32 @@ Describe 'Get-WindowsActivation product targeting' {
 
         Should -Invoke Get-Session -ModuleName slmgr-ps -Times 0
     }
+
+    It 'uses the read selector for a default basic query' {
+        $products = @(
+            New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+            New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+        )
+        Mock Get-WindowsLicensingProduct -ModuleName slmgr-ps { $products }
+        Mock Get-BasicLicenseInformation -ModuleName slmgr-ps {
+            [PSCustomObject]@{ Product = $Product }
+        }
+
+        $result = @(Get-WindowsActivation)
+
+        $result.Count | Should -Be 2
+        Should -Invoke Get-WindowsLicensingProduct -ModuleName slmgr-ps -Times 1 -ParameterFilter {
+            $ForRead -and $ErrorAction -eq 'Stop'
+        }
+        Should -Invoke Get-BasicLicenseInformation -ModuleName slmgr-ps -Times 2
+    }
+
+    It 'uses the read selector for a default extended query' {
+        Get-WindowsActivation -Extended
+
+        Should -Invoke Get-WindowsLicensingProduct -ModuleName slmgr-ps -Times 1 -ParameterFilter {
+            $ForRead -and $ErrorAction -eq 'Stop'
+        }
+        Should -Invoke Get-ExtendedLicenseInformation -ModuleName slmgr-ps -Times 1
+    }
 }
