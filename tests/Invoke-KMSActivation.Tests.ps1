@@ -8,7 +8,9 @@ BeforeAll {
 
     $script:Session = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
     $script:Service = New-CimInstance -ClassName SoftwareLicensingService -ClientOnly
-    $script:Product = New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+    $script:Product = New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly -Property @{
+        ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    }
 }
 
 Describe 'Invoke-KMSActivation product-key installation' {
@@ -28,12 +30,17 @@ Describe 'Invoke-KMSActivation product-key installation' {
             $MethodName -eq 'InstallProductKey' -and
             $Arguments.ProductKey -eq 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE'
         }
-        Should -Invoke Get-WindowsLicensingProduct -Times 1
+        Should -Invoke Get-WindowsLicensingProduct -Times 1 -ParameterFilter {
+            $PartialProductKey -eq 'EEEEE'
+        }
         Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
             $MethodName -eq 'Activate' -and $InputObject -eq $script:Product
         }
         Should -Invoke Get-KMSKey -Times 0
         Should -Invoke Get-LicenseStatus -Times 1
+        Should -Invoke Get-LicenseStatus -Times 1 -ParameterFilter {
+            $ActivationId -eq [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        }
     }
 
     It 'does not short-circuit an explicit installation when the previous product was activated' {
@@ -83,6 +90,34 @@ Describe 'Invoke-KMSActivation product-key installation' {
         Should -Invoke Get-WindowsLicensingProduct -Times 0
         Should -Invoke Get-LicenseStatus -Times 0
         Should -Invoke Invoke-SppCimMethod -Times 0
+    }
+
+    It 'does not activate when the installed product cannot be resolved' {
+        Mock Get-WindowsLicensingProduct { throw 'Installed product was not found.' }
+
+        { Invoke-KMSActivation -CimSession $script:Session -Service $script:Service `
+                -ProductKey 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE' } |
+            Should -Throw -ExpectedMessage '*Installed product was not found*'
+
+        Should -Invoke Invoke-SppCimMethod -Times 0 -ParameterFilter {
+            $MethodName -eq 'Activate'
+        }
+        Should -Invoke Get-LicenseStatus -Times 0
+    }
+
+    It 'does not activate when the installed product has no activation ID' {
+        Mock Get-WindowsLicensingProduct {
+            New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+        }
+
+        { Invoke-KMSActivation -CimSession $script:Session -Service $script:Service `
+                -ProductKey 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE' } |
+            Should -Throw -ExpectedMessage '*has no activation ID*'
+
+        Should -Invoke Invoke-SppCimMethod -Times 0 -ParameterFilter {
+            $MethodName -eq 'Activate'
+        }
+        Should -Invoke Get-LicenseStatus -Times 0
     }
 
     It 'resolves, activates, and verifies the requested activation ID' {

@@ -202,4 +202,54 @@ Describe 'Get-WindowsLicensingProduct' {
             $result.Name | Should -Contain 'Windows Add-on'
         }
     }
+
+    Context 'Installed key selection' {
+        It 'selects the Windows base product by partial product key' {
+            Mock Get-CimInstance {
+                [PSCustomObject]@{
+                    Name              = 'Windows 11 Pro'
+                    ID                = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+                    PartialProductKey = 'EEEEE'
+                }
+            }
+
+            $result = Get-WindowsLicensingProduct -CimSession $script:MockCimSession `
+                -PartialProductKey 'eeeee'
+
+            $result.Name | Should -Be 'Windows 11 Pro'
+            Should -Invoke Get-CimInstance -Times 1 -ParameterFilter {
+                $Query -match "PartialProductKey = 'EEEEE'" -and
+                $Query -match "ApplicationID = '55c92734-d682-4d71-983e-d6ec3f16059f'" -and
+                $Query -match 'LicenseIsAddon = FALSE'
+            }
+        }
+
+        It 'throws when the installed key cannot be resolved' {
+            Mock Get-CimInstance { @() }
+
+            { Get-WindowsLicensingProduct -CimSession $script:MockCimSession `
+                    -PartialProductKey 'EEEEE' } |
+                Should -Throw -ExpectedMessage '*was not found after installation*'
+        }
+
+        It 'throws when the partial key is ambiguous' {
+            Mock Get-CimInstance {
+                @(
+                    [PSCustomObject]@{ Name = 'Product A'; PartialProductKey = 'EEEEE' }
+                    [PSCustomObject]@{ Name = 'Product B'; PartialProductKey = 'EEEEE' }
+                )
+            }
+
+            { Get-WindowsLicensingProduct -CimSession $script:MockCimSession `
+                    -PartialProductKey 'EEEEE' } |
+                Should -Throw -ExpectedMessage '*cannot continue safely*'
+        }
+
+        It 'rejects an invalid partial key before querying CIM' {
+            { Get-WindowsLicensingProduct -CimSession $script:MockCimSession `
+                    -PartialProductKey 'BAD' } | Should -Throw
+
+            Should -Invoke Get-CimInstance -Times 0
+        }
+    }
 }
