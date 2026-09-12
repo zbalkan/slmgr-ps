@@ -20,6 +20,8 @@ Start-WindowsActivation -UseKmsClientKey -Verbose # Installs the GVLK for the de
 .EXAMPLE
 Start-WindowsActivation -ProductKey XXXXX-XXXXX-XXXXX-XXXXX-XXXXX # Installs an explicit product key then activates
 .EXAMPLE
+Start-WindowsActivation -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee # Activates one licensing product
+.EXAMPLE
 Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Activates WS01 over WinRM
 .EXAMPLE
 Start-WindowsActivation -Computer WS01, WS02 -CacheDisabled # Disables the KMS cache on WS01 and WS02
@@ -137,6 +139,14 @@ function Start-WindowsActivation
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
             ValueFromRemainingArguments = $false,
+            ParameterSetName = 'ActivateWithKMS')]
+        [Guid]
+        $ActivationId,
+
+        [Parameter(Mandatory = $false,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
             ParameterSetName = 'Offline')]
         [switch]$Offline,
 
@@ -224,6 +234,7 @@ function Start-WindowsActivation
                         if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $kmsParams['KMSServerPort'] = $KMSServerPort }
                         if ($UseKmsClientKey.IsPresent) { $kmsParams['InstallKmsClientKey'] = $true }
                         if ($PSBoundParameters.ContainsKey('ProductKey')) { $kmsParams['ProductKey'] = $ProductKey }
+                        if ($PSBoundParameters.ContainsKey('ActivationId')) { $kmsParams['ActivationId'] = $ActivationId }
                         Invoke-KMSActivation @kmsParams
                     }
 

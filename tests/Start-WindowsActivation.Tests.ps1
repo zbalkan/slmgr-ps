@@ -73,4 +73,20 @@ Describe 'Start-WindowsActivation' {
 
         Should -Invoke Get-Session -Times 0
     }
+
+    It 'forwards an activation ID to the activation helper' {
+        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+
+        Start-WindowsActivation -ActivationId $activationId -Confirm:$false
+
+        Should -Invoke Invoke-KMSActivation -Times 1 -ParameterFilter {
+            $ActivationId -eq $activationId
+        }
+    }
+
+    It 'rejects a malformed activation ID before opening a session' {
+        { Start-WindowsActivation -ActivationId 'not-a-guid' -Confirm:$false } | Should -Throw
+
+        Should -Invoke Get-Session -Times 0
+    }
 }

@@ -73,4 +73,33 @@ Describe 'Invoke-KMSActivation product-key installation' {
 
         Should -Invoke Invoke-SppCimMethod -Times 0
     }
+
+    It 'resolves, activates, and verifies the requested activation ID' {
+        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        $script:StatusCall = 0
+        Mock Get-LicenseStatus {
+            $script:StatusCall++
+            if ($script:StatusCall -eq 1)
+            {
+                [PSCustomObject]@{ Activated = $false; LicenseStatus = 'Unlicensed' }
+            }
+            else
+            {
+                [PSCustomObject]@{ Activated = $true; LicenseStatus = 'Licensed' }
+            }
+        } -ParameterFilter { $ActivationId -eq $activationId }
+
+        Invoke-KMSActivation -CimSession $script:Session -Service $script:Service `
+            -ActivationId $activationId
+
+        Should -Invoke Get-WindowsLicensingProduct -Times 1 -ParameterFilter {
+            $ActivationId -eq $activationId
+        }
+        Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+            $MethodName -eq 'Activate' -and $InputObject -eq $script:Product
+        }
+        Should -Invoke Get-LicenseStatus -Times 2 -ParameterFilter {
+            $ActivationId -eq $activationId
+        }
+    }
 }
