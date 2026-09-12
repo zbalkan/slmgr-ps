@@ -140,6 +140,7 @@ function Start-WindowsActivation
             ValueFromPipelineByPropertyName = $false,
             ValueFromRemainingArguments = $false,
             ParameterSetName = 'ActivateWithKMS')]
+        [Parameter(ParameterSetName = 'Offline')]
         [Guid]
         $ActivationId,
 
@@ -211,7 +212,13 @@ function Start-WindowsActivation
                     'Offline'
                     {
                         Write-Verbose 'Initiating offline activation operation'
-                        Invoke-OfflineActivation -CimSession $session -Service $service -ConfirmationId $ConfirmationId
+                        $offlineParams = @{
+                            CimSession     = $session
+                            Service        = $service
+                            ConfirmationId = $ConfirmationId
+                        }
+                        if ($PSBoundParameters.ContainsKey('ActivationId')) { $offlineParams['ActivationId'] = $ActivationId }
+                        Invoke-OfflineActivation @offlineParams
                     }
 
                     'Rearm'
