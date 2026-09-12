@@ -10,7 +10,9 @@ A partial PowerShell alternative for common `slmgr.vbs` workflows.
 - Added activation-ID targeting for license queries, activation, offline activation, key removal, and KMS client settings.
 - Added `-All` enumeration for basic and extended license information.
 - Added product and application identifiers to license-information output.
-- Added batch failure containment for reset operations.
+- Added batch failure containment for activation and reset operations.
+- Added deterministic post-install product selection and final activation-ID verification.
+- Added validation that rejects ambiguous product-key and activation-ID combinations.
 
 ## Changes in 1.1.2
 
@@ -127,7 +129,9 @@ Start-WindowsActivation -Computer WS01 -KMSServerFQDN kms.example.com -KMSServer
 Start-WindowsActivation -Computer WS01 -CacheDisabled
 ```
 
-`-UseKmsClientKey` installs a known KMS client setup key for the detected Windows edition. `-ProductKey` accepts an explicit key. Both forms then attempt activation because this module deliberately combines key installation and activation into one operation.
+`-UseKmsClientKey` installs a known KMS client setup key for the detected Windows edition. `-ProductKey` accepts an explicit key. Both forms then resolve the product registration matching the installed key and attempt activation because this module deliberately combines key installation and activation into one operation.
+
+Do not combine `-ActivationId` with `-ProductKey` or `-UseKmsClientKey`. Windows exposes key installation on `SoftwareLicensingService`, not on an individual licensing product, so that combination cannot safely guarantee that the requested activation ID receives the key. To target an activation ID, install no key in that invocation and use `-ActivationId` by itself.
 
 ### Offline activation
 
@@ -313,6 +317,8 @@ The following areas are intentionally not presented as supported yet:
 Avoid passing secrets directly on the command line. `slmgr.vbs` supports a command shape that includes username and password as arguments. `slmgr-ps` uses `PSCredential` instead, which is more appropriate for PowerShell usage and avoids exposing passwords in command-line history or process listings.
 
 An explicit `-ProductKey` remains plain command-line input and may be retained in PowerShell history. Protect shell history and automation logs, and avoid recording the full invocation in shared diagnostics.
+
+For calls containing multiple computers, activation and reset commands attempt every computer before reporting the collected failures. The command still ends with a terminating error when any target fails, so automation must treat the invocation as failed even when later computers succeeded.
 
 For remote execution, prefer properly configured WinRM. Where appropriate, use HTTPS for WinRM. See Microsoft documentation on [WinRM security](https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/winrm-security).
 
