@@ -64,7 +64,13 @@ function Get-WindowsActivation
         [switch]$Expiry,
 
         [Parameter(ParameterSetName = 'Offline')]
-        [switch]$Offline
+        [switch]$Offline,
+
+        [Parameter(ParameterSetName = 'Basic')]
+        [Parameter(ParameterSetName = 'Extended')]
+        [Parameter(ParameterSetName = 'Expiry')]
+        [Parameter(ParameterSetName = 'Offline')]
+        [Guid]$ActivationId
     )
     Begin
     {
@@ -79,23 +85,30 @@ function Get-WindowsActivation
             $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
             try
             {
+                $informationParams = @{ CimSession = $session; ErrorAction = 'Stop' }
+                if ($PSBoundParameters.ContainsKey('ActivationId'))
+                {
+                    $informationParams['Product'] = Get-WindowsLicensingProduct -CimSession $session `
+                        -ActivationId $ActivationId -ErrorAction Stop
+                }
+
                 switch ($PSCmdlet.ParameterSetName)
                 {
                     'Extended'
                     {
-                        $result = Get-ExtendedLicenseInformation -CimSession $session -ErrorAction Stop
+                        $result = Get-ExtendedLicenseInformation @informationParams
                     }
                     'Expiry'
                     {
-                        $result = Get-ExpiryInformation -CimSession $session -ErrorAction Stop
+                        $result = Get-ExpiryInformation @informationParams
                     }
                     'Offline'
                     {
-                        $result = Get-OfflineInstallationId -CimSession $session -ErrorAction Stop
+                        $result = Get-OfflineInstallationId @informationParams
                     }
                     default
                     {
-                        $result = Get-BasicLicenseInformation -CimSession $session -ErrorAction Stop
+                        $result = Get-BasicLicenseInformation @informationParams
                     }
                 }
                 $results.Add($result)

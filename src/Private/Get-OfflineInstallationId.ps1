@@ -3,13 +3,20 @@ function Get-OfflineInstallationId
     [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param (
-        [Microsoft.Management.Infrastructure.CimSession]$CimSession
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+        [CimInstance]$Product
     )
 
-    $product = Get-WindowsLicensingProduct -CimSession $CimSession
+    if ($null -eq $Product)
+    {
+        $Product = Get-WindowsLicensingProduct -CimSession $CimSession
+    }
 
     $result = [PSCustomObject]@{
-        OfflineInstallationId = $product.OfflineInstallationId
+        Name                  = $Product.Name
+        ActivationId          = $Product.ID
+        ApplicationId         = $Product.ApplicationID
+        OfflineInstallationId = $Product.OfflineInstallationId
     }
     return $result
 }

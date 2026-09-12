@@ -3,31 +3,35 @@ function Get-ExtendedLicenseInformation
     [OutputType([PSCustomObject])]
     [CmdletBinding()]
     param (
-        [Microsoft.Management.Infrastructure.CimSession]$CimSession
+        [Microsoft.Management.Infrastructure.CimSession]$CimSession,
+        [CimInstance]$Product
     )
 
-    $product = Get-WindowsLicensingProduct -CimSession $CimSession
+    if ($null -eq $Product)
+    {
+        $Product = Get-WindowsLicensingProduct -CimSession $CimSession
+    }
 
     $trustedTime = [datetime]::MinValue
-    if ($null -ne $product.TrustedTime)
+    if ($null -ne $Product.TrustedTime)
     {
-        $trustedTime = $product.TrustedTime
+        $trustedTime = $Product.TrustedTime
     }
 
     $result = [PSCustomObject]@{
-        Name                       = $product.Name
-        Description                = $product.Description
-        ActivationId               = $product.ID
-        ApplicationId              = $product.ApplicationID
-        ExtendedPid                = $product.ProductKeyID
-        ProductKeyChannel          = $product.ProductKeyChannel
-        InstallationId             = $product.OfflineInstallationId
-        UseLicenseUrl              = $product.UseLicenseURL
-        ValidationUrl              = $product.ValidationURL
-        PartialProductKey          = $product.PartialProductKey
-        LicenseStatus              = [LicenseStatusCode]($product.LicenseStatus)
-        RemainingWindowsRearmCount = $product.RemainingAppReArmCount
-        RemainingSkuRearmCount     = $product.RemainingSkuReArmCount
+        Name                       = $Product.Name
+        Description                = $Product.Description
+        ActivationId               = $Product.ID
+        ApplicationId              = $Product.ApplicationID
+        ExtendedPid                = $Product.ProductKeyID
+        ProductKeyChannel          = $Product.ProductKeyChannel
+        InstallationId             = $Product.OfflineInstallationId
+        UseLicenseUrl              = $Product.UseLicenseURL
+        ValidationUrl              = $Product.ValidationURL
+        PartialProductKey          = $Product.PartialProductKey
+        LicenseStatus              = [LicenseStatusCode]($Product.LicenseStatus)
+        RemainingWindowsRearmCount = $Product.RemainingAppReArmCount
+        RemainingSkuRearmCount     = $Product.RemainingSkuReArmCount
         TrustedTime                = $trustedTime
     }
     return $result
