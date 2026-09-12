@@ -89,4 +89,15 @@ Describe 'Start-WindowsActivation' {
 
         Should -Invoke Get-Session -Times 0
     }
+
+    It 'forwards an activation ID to offline activation' {
+        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+
+        Start-WindowsActivation -Offline -ConfirmationId ('1' * 54) `
+            -ActivationId $activationId -Confirm:$false
+
+        Should -Invoke Invoke-OfflineActivation -Times 1 -ParameterFilter {
+            $ActivationId -eq $activationId
+        }
+    }
 }
