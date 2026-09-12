@@ -102,4 +102,28 @@ Describe 'Invoke-KMSActivation product-key installation' {
             $ActivationId -eq $activationId
         }
     }
+
+    It 'applies KMS client settings to the requested activation product' {
+        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        $script:StatusCall = 0
+        Mock Get-LicenseStatus {
+            $script:StatusCall++
+            [PSCustomObject]@{
+                Activated = $script:StatusCall -gt 1
+                LicenseStatus = if ($script:StatusCall -gt 1) { 'Licensed' } else { 'Unlicensed' }
+            }
+        }
+
+        Invoke-KMSActivation -CimSession $script:Session -Service $script:Service `
+            -ActivationId $activationId -KMSServerFQDN 'kms.example.com' -KMSServerPort 1689
+
+        Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+            $MethodName -eq 'SetKeyManagementServiceMachine' -and
+            $InputObject -eq $script:Product
+        }
+        Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+            $MethodName -eq 'SetKeyManagementServicePort' -and
+            $InputObject -eq $script:Product
+        }
+    }
 }
