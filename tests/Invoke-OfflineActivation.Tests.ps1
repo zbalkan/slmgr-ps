@@ -106,4 +106,24 @@ Describe 'Invoke-OfflineActivation' {
             -ConfirmationId ('1' * 54) -WarningVariable warning
         $warning | Should -Match 'extended grace'
     }
+
+    It 'uses one activation ID for status, installation ID, and confirmation deposit' {
+        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+
+        Invoke-OfflineActivation -CimSession $script:MockCimSession -Service $script:Service `
+            -ConfirmationId ('1' * 54) -ActivationId $activationId
+
+        Should -Invoke Get-LicenseStatus -Times 2 -ParameterFilter {
+            $ActivationId -eq $activationId
+        }
+        Should -Invoke Get-WindowsLicensingProduct -Times 1 -ParameterFilter {
+            $ActivationId -eq $activationId
+        }
+        Should -Invoke Get-OfflineInstallationId -Times 1 -ParameterFilter {
+            $Product -eq $script:Product
+        }
+        Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+            $MethodName -eq 'DepositOfflineConfirmationId' -and $InputObject -eq $script:Product
+        }
+    }
 }
