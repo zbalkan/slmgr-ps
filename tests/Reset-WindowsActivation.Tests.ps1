@@ -163,4 +163,58 @@ Describe 'Reset-WindowsActivation' {
             Should -Invoke Remove-CimSession -Times 1
         }
     }
+
+    Context 'Activation ID targeting' {
+        BeforeEach {
+            $script:Product = New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+            Mock Get-Session { $script:MockCimSession }
+            Mock Remove-CimSession {}
+            Mock Get-WindowsLicensingProduct { $script:Product }
+            Mock Get-CimInstance { [PSCustomObject]@{ ClassName = 'SoftwareLicensingService' } }
+            Mock Invoke-SppCimMethod {}
+        }
+
+        It 'uninstalls the key from the requested product' {
+            $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+
+            Reset-WindowsActivation -UninstallProductKey -ActivationId $activationId -Confirm:$false
+
+            Should -Invoke Get-WindowsLicensingProduct -Times 1 -ParameterFilter {
+                $ActivationId -eq $activationId
+            }
+            Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+                $MethodName -eq 'UninstallProductKey' -and $InputObject -eq $script:Product
+            }
+        }
+
+        It 'clears KMS settings from the requested product without querying the service' {
+            Reset-WindowsActivation -ClearKMSSettings `
+                -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false
+
+            Should -Invoke Get-CimInstance -Times 0
+            Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+                $MethodName -eq 'ClearKeyManagementServiceMachine' -and
+                $InputObject -eq $script:Product
+            }
+            Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+                $MethodName -eq 'ClearKeyManagementServicePort' -and
+                $InputObject -eq $script:Product
+            }
+        }
+
+        It 'rejects an activation ID used only with service-wide registry clearing' {
+            { Reset-WindowsActivation -ClearProductKeyFromRegistry `
+                    -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false } |
+                Should -Throw -ExpectedMessage '*requires UninstallProductKey or ClearKMSSettings*'
+
+            Should -Invoke Get-Session -Times 0
+        }
+
+        It 'rejects a malformed activation ID before opening a session' {
+            { Reset-WindowsActivation -UninstallProductKey -ActivationId 'not-a-guid' -Confirm:$false } |
+                Should -Throw
+
+            Should -Invoke Get-Session -Times 0
+        }
+    }
 }

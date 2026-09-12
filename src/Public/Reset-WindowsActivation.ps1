@@ -18,6 +18,8 @@ Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry -Verbo
 .EXAMPLE
 Reset-WindowsActivation -ClearKMSSettings -Verbose
 .EXAMPLE
+Reset-WindowsActivation -UninstallProductKey -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+.EXAMPLE
 Reset-WindowsActivation -Computer WS01 -Credentials (Get-Credential) -UninstallProductKey -ClearProductKeyFromRegistry -ClearKMSSettings
 .LINK
 https://github.com/zbalkan/slmgr-ps
@@ -61,13 +63,23 @@ function Reset-WindowsActivation
         # Clear KMS settings (slmgr /ckms)
         [Parameter(Mandatory = $false)]
         [switch]
-        $ClearKMSSettings
+        $ClearKMSSettings,
+
+        [Parameter(Mandatory = $false)]
+        [Guid]
+        $ActivationId
     )
     Begin
     {
         if (-not $UninstallProductKey.IsPresent -and -not $ClearProductKeyFromRegistry.IsPresent -and -not $ClearKMSSettings.IsPresent)
         {
             throw 'At least one reset operation must be specified: -UninstallProductKey, -ClearProductKeyFromRegistry, or -ClearKMSSettings.'
+        }
+        $hasActivationId = $PSBoundParameters.ContainsKey('ActivationId')
+        $hasTargetedOperation = $UninstallProductKey.IsPresent -or $ClearKMSSettings.IsPresent
+        if ($hasActivationId -and -not $hasTargetedOperation)
+        {
+            throw 'ActivationId requires UninstallProductKey or ClearKMSSettings.'
         }
     }
     Process
@@ -86,15 +98,23 @@ function Reset-WindowsActivation
             {
                 $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
 
+                $product = $null
+                if ($PSBoundParameters.ContainsKey('ActivationId'))
+                {
+                    $product = Get-WindowsLicensingProduct -CimSession $session -ActivationId $ActivationId
+                }
+
                 if ($UninstallProductKey.IsPresent)
                 {
-                    $product = Get-WindowsLicensingProduct -CimSession $session
+                    if ($null -eq $product) { $product = Get-WindowsLicensingProduct -CimSession $session }
 
                     Write-Verbose 'Uninstalling product key (slmgr /upk)'
                     $product | Invoke-SppCimMethod -MethodName UninstallProductKey
                 }
 
-                if ($ClearProductKeyFromRegistry.IsPresent -or $ClearKMSSettings.IsPresent)
+                $requiresService = $ClearProductKeyFromRegistry.IsPresent
+                if ($ClearKMSSettings.IsPresent -and $null -eq $product) { $requiresService = $true }
+                if ($requiresService)
                 {
                     $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService -ErrorAction Stop
                 }
@@ -108,8 +128,9 @@ function Reset-WindowsActivation
                 if ($ClearKMSSettings.IsPresent)
                 {
                     Write-Verbose 'Clearing KMS settings (slmgr /ckms)'
-                    $service | Invoke-SppCimMethod -MethodName ClearKeyManagementServiceMachine
-                    $service | Invoke-SppCimMethod -MethodName ClearKeyManagementServicePort
+                    $kmsTarget = if ($null -ne $product) { $product } else { $service }
+                    $kmsTarget | Invoke-SppCimMethod -MethodName ClearKeyManagementServiceMachine
+                    $kmsTarget | Invoke-SppCimMethod -MethodName ClearKeyManagementServicePort
                 }
             }
             finally

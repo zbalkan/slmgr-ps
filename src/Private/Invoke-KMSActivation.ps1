@@ -19,6 +19,11 @@ function Invoke-KMSActivation
     $installRequested = $InstallKmsClientKey.IsPresent -or $PSBoundParameters.ContainsKey('ProductKey')
     $statusParams = @{ CimSession = $CimSession }
     if ($PSBoundParameters.ContainsKey('ActivationId')) { $statusParams['ActivationId'] = $ActivationId }
+    $product = $null
+    if ($PSBoundParameters.ContainsKey('ActivationId'))
+    {
+        $product = Get-WindowsLicensingProduct -CimSession $CimSession -ActivationId $ActivationId
+    }
     if (-not $installRequested)
     {
         $licenseInfo = Get-LicenseStatus @statusParams
@@ -28,15 +33,17 @@ function Invoke-KMSActivation
 
     if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
     {
-        $Service | Invoke-SppCimMethod -MethodName SetKeyManagementServiceMachine -Arguments @{ MachineName = $KMSServerFQDN }
+        $kmsTarget = if ($null -ne $product) { $product } else { $Service }
+        $kmsTarget | Invoke-SppCimMethod -MethodName SetKeyManagementServiceMachine -Arguments @{ MachineName = $KMSServerFQDN }
         # Always set the port when changing the FQDN: without this, a stale non-default port
         # from a previous call would be reused, silently targeting the wrong endpoint.
         $effectivePort = if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $KMSServerPort } else { 1688 }
-        $Service | Invoke-SppCimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $effectivePort }
+        $kmsTarget | Invoke-SppCimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $effectivePort }
     }
     elseif ($PSBoundParameters.ContainsKey('KMSServerPort'))
     {
-        $Service | Invoke-SppCimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $KMSServerPort }
+        $kmsTarget = if ($null -ne $product) { $product } else { $Service }
+        $kmsTarget | Invoke-SppCimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $KMSServerPort }
     }
 
     if ($installRequested)
@@ -59,9 +66,7 @@ function Invoke-KMSActivation
     }
 
     # Activate the product selected after any requested key installation.
-    $productParams = @{ CimSession = $CimSession }
-    if ($PSBoundParameters.ContainsKey('ActivationId')) { $productParams['ActivationId'] = $ActivationId }
-    $product = Get-WindowsLicensingProduct @productParams
+    if ($null -eq $product) { $product = Get-WindowsLicensingProduct -CimSession $CimSession }
     $product | Invoke-SppCimMethod -MethodName Activate
     $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
 
