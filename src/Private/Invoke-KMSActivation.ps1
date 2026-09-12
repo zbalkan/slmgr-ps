@@ -7,6 +7,7 @@ function Invoke-KMSActivation
         [string]$KMSServerFQDN,
         [int]$KMSServerPort,
         [switch]$InstallKmsClientKey,
+        [ValidatePattern('^[A-Za-z0-9]{5}(?:-[A-Za-z0-9]{5}){4}$')]
         [string]$ProductKey,
         [Guid]$ActivationId
     )
@@ -73,6 +74,15 @@ function Invoke-KMSActivation
         Start-Sleep -Seconds 10 # Installing product key takes time.
         $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
         Start-Sleep -Seconds 2
+
+        $partialProductKey = $keyToInstall.Substring($keyToInstall.Length - 5).ToUpperInvariant()
+        $product = Get-WindowsLicensingProduct -CimSession $CimSession `
+            -PartialProductKey $partialProductKey
+        if ([string]::IsNullOrWhiteSpace($product.ID))
+        {
+            throw 'The licensing product selected after key installation has no activation ID; activation cannot continue safely.'
+        }
+        $statusParams['ActivationId'] = [Guid]$product.ID
     }
 
     # Activate the product selected after any requested key installation.
