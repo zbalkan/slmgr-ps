@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-13
+
+### Added
+
+* Added `Get-WindowsKmsHost` for reporting documented KMS host state, client counts, request counters, intervals, DNS publishing, priority, and listening-port configuration.
+* Added `Set-WindowsKmsHost` for configuring the KMS host listening port, activation interval, renewal interval, DNS publishing, and process priority.
+* Added support for clearing an explicit KMS host listening-port override and returning to the documented default port.
+* Added Software Protection Platform contracts for KMS host listening-port, interval, DNS-publishing, and low-priority methods.
+
+### Changed
+
+* KMS host mutations now reject targets that do not report `IsKeyManagementServiceMachine = 1` before invoking host-only methods.
+* Combined KMS host changes run in deterministic order, verify each setting independently, and preserve partial-completion results when a later setting fails.
+* KMS host reporting distinguishes an explicit listening-port override from the effective documented default and reports current intervals alongside their documented defaults.
+* The module now exports fifteen public commands.
+
+### Security
+
+* KMS host configuration uses `ShouldProcess` with high confirmation impact and does not infer host capability from Windows edition or installed product keys.
+
 ## [1.8.0] - 2026-09-13
 
 ### Added
