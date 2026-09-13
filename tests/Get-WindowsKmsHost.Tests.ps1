@@ -49,7 +49,14 @@ Describe 'Get-WindowsKmsHost' {
     }
 
     It 'reports an explicit listening-port override' {
-        $script:Service.KeyManagementServiceListeningPort = [uint32]2500
+        $script:Service = New-CimInstance -ClassName SoftwareLicensingService -ClientOnly -Property @{
+            IsKeyManagementServiceMachine     = [uint32]1
+            KeyManagementServiceListeningPort = [uint32]2500
+            VLActivationInterval              = [uint32]120
+            VLRenewalInterval                 = [uint32]10080
+            KeyManagementServiceDnsPublishing = $true
+            KeyManagementServiceLowPriority   = $false
+        }
 
         $result = Get-WindowsKmsHost
 
