@@ -10,7 +10,9 @@ lookup domain. Multiple switches can be combined in a single call.
 .INPUTS
 string[]. You can pass the computer names.
 .OUTPUTS
-None if successful. Throws on error.
+slmgr-ps.LicensingOperationResult. One result is emitted for each attempted computer.
+Throws one aggregate error after processing the requested computer batch when any
+computer fails.
 .EXAMPLE
 Reset-WindowsActivation -UninstallProductKey -Verbose
 .EXAMPLE
@@ -28,12 +30,12 @@ https://github.com/zbalkan/slmgr-ps
 #>
 function Reset-WindowsActivation
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $false,
         ConfirmImpact = 'High')]
     Param
     (
-        # Type localhost or . for local computer or do not use the parameter
         [Parameter(Mandatory = $false,
             Position = 0,
             ValueFromPipeline = $true,
@@ -43,7 +45,6 @@ function Reset-WindowsActivation
         [string[]]
         $Computer = @('localhost'),
 
-        # Define credentials other than current user if needed
         [Parameter(Mandatory = $false,
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
@@ -52,22 +53,18 @@ function Reset-WindowsActivation
         [PSCredential]
         $Credentials,
 
-        # Uninstall the product key (slmgr /upk)
         [Parameter(Mandatory = $false)]
         [switch]
         $UninstallProductKey,
 
-        # Clear the product key from the registry (slmgr /cpky)
         [Parameter(Mandatory = $false)]
         [switch]
         $ClearProductKeyFromRegistry,
 
-        # Clear KMS settings (slmgr /ckms)
         [Parameter(Mandatory = $false)]
         [switch]
         $ClearKMSSettings,
 
-        # Clear the KMS DNS lookup domain (slmgr /ckms-domain)
         [Parameter(Mandatory = $false)]
         [switch]
         $ClearKMSLookupDomain,
@@ -92,10 +89,12 @@ function Reset-WindowsActivation
         {
             throw 'ActivationId requires UninstallProductKey, ClearKMSSettings, or ClearKMSLookupDomain.'
         }
+
+        $resultActivationId = if ($hasActivationId) { $ActivationId } else { $null }
+        $resetFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
     }
     Process
     {
-        $resetFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
         Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
         foreach ($c in $Computer)
         {
@@ -106,12 +105,12 @@ function Reset-WindowsActivation
 
             Write-Verbose "Creating new CimSession for computer $c"
             $session = $null
+            $product = $null
             try
             {
                 $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
 
-                $product = $null
-                if ($PSBoundParameters.ContainsKey('ActivationId'))
+                if ($hasActivationId)
                 {
                     $product = Get-WindowsLicensingProduct -CimSession $session -ActivationId $ActivationId
                 }
@@ -145,8 +144,6 @@ function Reset-WindowsActivation
                     $kmsTarget | Invoke-SppCimMethod -MethodName ClearKeyManagementServiceLookupDomain
                 }
 
-                # Uninstall last so combined product-scoped operations do not depend on a
-                # CIM instance after its installed key has been removed.
                 if ($UninstallProductKey.IsPresent)
                 {
                     if ($null -eq $product) { $product = Get-WindowsLicensingProduct -CimSession $session }
@@ -154,10 +151,27 @@ function Reset-WindowsActivation
                     Write-Verbose 'Uninstalling product key (slmgr /upk)'
                     $product | Invoke-SppCimMethod -MethodName UninstallProductKey
                 }
+
+                $productName = if ($null -ne $product) { $product.Name } else { $null }
+                New-LicensingOperationResult `
+                    -ComputerName $c `
+                    -Operation ResetActivation `
+                    -Success $true `
+                    -ActivationId $resultActivationId `
+                    -ProductName $productName `
+                    -VerificationState ProviderAccepted
             }
             catch
             {
-                $resetFailures.Add($_)
+                $productName = if ($null -ne $product) { $product.Name } else { $null }
+                $structured = New-LicensingOperationError `
+                    -ErrorRecord $_ `
+                    -ComputerName $c `
+                    -Operation ResetActivation `
+                    -ActivationId $resultActivationId `
+                    -ProductName $productName
+                $resetFailures.Add($structured.ErrorRecord)
+                Write-Output $structured.Result
             }
             finally
             {
@@ -167,14 +181,9 @@ function Reset-WindowsActivation
                 }
             }
         }
-
-        if ($resetFailures.Count -gt 0)
-        {
-            foreach ($failure in $resetFailures)
-            {
-                Write-Error -ErrorRecord $failure
-            }
-            $PSCmdlet.ThrowTerminatingError($resetFailures[0])
-        }
+    }
+    End
+    {
+        Complete-LicensingOperationBatch -Failures $resetFailures
     }
 }
