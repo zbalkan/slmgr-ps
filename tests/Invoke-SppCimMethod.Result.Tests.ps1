@@ -18,7 +18,7 @@ Describe 'Invoke-SppCimMethod result contract' {
     }
 
     It 'preserves provider failure identity and hexadecimal error code' {
-        Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = [uint32]0xC004F050 } }
+        Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = [uint32]3221549136 } }
 
         $caught = $null
         try
@@ -32,7 +32,7 @@ Describe 'Invoke-SppCimMethod result contract' {
 
         $caught | Should -Not -BeNullOrEmpty
         $caught.FullyQualifiedErrorId | Should -Match '^SppProviderMethodFailed'
-        $caught.Exception.Data['ProviderReturnValue'] | Should -Be ([uint32]0xC004F050)
+        $caught.Exception.Data['ProviderReturnValue'] | Should -Be ([uint32]3221549136)
         $caught.Exception.Data['ErrorCode'] | Should -Be '0xC004F050'
         $caught.Exception.Data['MethodName'] | Should -Be 'Activate'
         $caught.TargetObject.MethodName | Should -Be 'Activate'

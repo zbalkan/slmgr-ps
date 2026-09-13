@@ -3,6 +3,7 @@ function Complete-LicensingOperationBatch
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
         [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]$Failures
     )
 
