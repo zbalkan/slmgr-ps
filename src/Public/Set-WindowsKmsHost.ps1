@@ -134,7 +134,14 @@ function Set-WindowsKmsHost
                     })
             }
 
-            $approved = @($settings | Where-Object { $PSCmdlet.ShouldProcess($c, $_.Action) })
+            $approved = [System.Collections.Generic.List[object]]::new()
+            foreach ($setting in $settings)
+            {
+                if ($PSCmdlet.ShouldProcess($c, $setting.Action))
+                {
+                    $approved.Add($setting)
+                }
+            }
             if ($approved.Count -eq 0)
             {
                 continue
