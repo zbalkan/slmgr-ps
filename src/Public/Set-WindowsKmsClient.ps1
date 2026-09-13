@@ -10,7 +10,8 @@ with ActivationId. Host caching is a SoftwareLicensingService setting.
 .INPUTS
 String[]. You can pass computer names.
 .OUTPUTS
-None if successful. Throws after processing the requested computer batch when any
+slmgr-ps.LicensingOperationResult. One result is emitted for each attempted computer.
+Throws one aggregate error after processing the requested computer batch when any
 computer fails.
 .EXAMPLE
 Set-WindowsKmsClient -KmsServer kms01.example.test
@@ -29,6 +30,7 @@ https://github.com/zbalkan/slmgr-ps
 #>
 function Set-WindowsKmsClient
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $false,
         ConfirmImpact = 'High',
@@ -78,6 +80,9 @@ function Set-WindowsKmsClient
     begin
     {
         $hasActivationId = $PSBoundParameters.ContainsKey('ActivationId')
+        $resultActivationId = if ($hasActivationId) { $ActivationId } else { $null }
+        $configurationFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
+
         if ($PSCmdlet.ParameterSetName -eq 'Endpoint')
         {
             $endpointParameters = @{ Endpoint = $KmsServer }
@@ -88,11 +93,18 @@ function Set-WindowsKmsClient
         {
             $resolvedLookupDomain = Resolve-KmsLookupDomain -LookupDomain $LookupDomain
         }
+
+        $operation = switch ($PSCmdlet.ParameterSetName)
+        {
+            'Endpoint' { 'SetKmsEndpoint' }
+            'PortOnly' { 'SetKmsPort' }
+            'LookupDomain' { 'SetKmsLookupDomain' }
+            'HostCaching' { 'SetKmsHostCaching' }
+        }
     }
 
     process
     {
-        $configurationFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
         foreach ($c in $Computer)
         {
             $action = switch ($PSCmdlet.ParameterSetName)
@@ -105,6 +117,7 @@ function Set-WindowsKmsClient
             if (-not $PSCmdlet.ShouldProcess($c, $action)) { continue }
 
             $session = $null
+            $target = $null
             try
             {
                 $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
@@ -146,10 +159,27 @@ function Set-WindowsKmsClient
                             -Arguments @{ DisableCaching = $disableCaching }
                     }
                 }
+
+                $productName = if ($hasActivationId) { $target.Name } else { $null }
+                New-LicensingOperationResult `
+                    -ComputerName $c `
+                    -Operation $operation `
+                    -Success $true `
+                    -ActivationId $resultActivationId `
+                    -ProductName $productName `
+                    -VerificationState ProviderAccepted
             }
             catch
             {
-                $configurationFailures.Add($_)
+                $productName = if ($hasActivationId -and $null -ne $target) { $target.Name } else { $null }
+                $structured = New-LicensingOperationError `
+                    -ErrorRecord $_ `
+                    -ComputerName $c `
+                    -Operation $operation `
+                    -ActivationId $resultActivationId `
+                    -ProductName $productName
+                $configurationFailures.Add($structured.ErrorRecord)
+                Write-Output $structured.Result
             }
             finally
             {
@@ -159,14 +189,10 @@ function Set-WindowsKmsClient
                 }
             }
         }
+    }
 
-        if ($configurationFailures.Count -gt 0)
-        {
-            foreach ($failure in $configurationFailures)
-            {
-                Write-Error -ErrorRecord $failure
-            }
-            $PSCmdlet.ThrowTerminatingError($configurationFailures[0])
-        }
+    end
+    {
+        Complete-LicensingOperationBatch -Failures $configurationFailures
     }
 }
