@@ -10,6 +10,7 @@ Describe 'Public command state' {
             'Install-WindowsLicense'
             'Repair-WindowsLicense'
             'Reset-WindowsActivation'
+            'Set-WindowsActivationType'
             'Set-WindowsKmsClient'
             'Start-WindowsActivation'
         )
