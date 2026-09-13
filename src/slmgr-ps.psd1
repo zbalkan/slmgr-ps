@@ -69,7 +69,13 @@
     # NestedModules = @()
 
     # Functions to export from this module
-    FunctionsToExport = @('Get-WindowsActivation', 'Reset-WindowsActivation', 'Start-WindowsActivation')
+    FunctionsToExport = @(
+        'Get-WindowsActivation'
+        'Install-WindowsLicense'
+        'Repair-WindowsLicense'
+        'Reset-WindowsActivation'
+        'Start-WindowsActivation'
+    )
 
     # Cmdlets to export from this module
     CmdletsToExport   = @()

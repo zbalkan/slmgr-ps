@@ -216,7 +216,18 @@ function Start-WindowsActivation
         Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
         foreach ($c in $Computer)
         {
-            if (-not $pscmdlet.ShouldProcess($c, 'Activate Windows'))
+            $action = switch ($PSCmdlet.ParameterSetName)
+            {
+                'Offline' { 'Apply an offline Windows confirmation ID' }
+                'Rearm'
+                {
+                    if ($hasApplicationId) { "Rearm application $ApplicationId" }
+                    elseif ($hasActivationId) { "Rearm licensing product $ActivationId" }
+                    else { 'Rearm Windows' }
+                }
+                default { 'Activate Windows' }
+            }
+            if (-not $pscmdlet.ShouldProcess($c, $action))
             {
                 continue
             }
