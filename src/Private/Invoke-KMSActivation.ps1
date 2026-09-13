@@ -38,7 +38,12 @@ function Invoke-KMSActivation
         if ($licenseInfo.Activated -and -not $kmsSettingsRequested)
         {
             Write-Warning 'The product is already activated.'
-            return
+            return [PSCustomObject]@{
+                ActivationId      = $licenseInfo.ActivationId
+                ProductName       = $licenseInfo.ProductName
+                VerificationState = 'Verified'
+                RestartRequired   = $false
+            }
         }
     }
 
@@ -46,8 +51,6 @@ function Invoke-KMSActivation
     {
         $kmsTarget = if ($null -ne $product) { $product } else { $Service }
         $kmsTarget | Invoke-SppCimMethod -MethodName SetKeyManagementServiceMachine -Arguments @{ MachineName = $KMSServerFQDN }
-        # Always set the port when changing the FQDN: without this, a stale non-default port
-        # from a previous call would be reused, silently targeting the wrong endpoint.
         $effectivePort = if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $KMSServerPort } else { 1688 }
         $kmsTarget | Invoke-SppCimMethod -MethodName SetKeyManagementServicePort -Arguments @{ PortNumber = $effectivePort }
     }
@@ -71,7 +74,7 @@ function Invoke-KMSActivation
 
         Write-Verbose 'Installing product key'
         $Service | Invoke-SppCimMethod -MethodName InstallProductKey -Arguments @{ ProductKey = $keyToInstall }
-        Start-Sleep -Seconds 10 # Installing product key takes time.
+        Start-Sleep -Seconds 10
         $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
         Start-Sleep -Seconds 2
 
@@ -85,7 +88,6 @@ function Invoke-KMSActivation
         $statusParams['ActivationId'] = [Guid]$product.ID
     }
 
-    # Activate the product selected after any requested key installation.
     if ($null -eq $product) { $product = Get-WindowsLicensingProduct -CimSession $CimSession }
     $product | Invoke-SppCimMethod -MethodName Activate
     $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
@@ -94,9 +96,15 @@ function Invoke-KMSActivation
     if ($license.Activated)
     {
         Write-Verbose "The computer activated successfully. Current status: $($license.LicenseStatus)"
+        $outcomeActivationId = if ($null -ne $license.ActivationId) { $license.ActivationId } else { $product.ID }
+        $outcomeProductName = if (-not [string]::IsNullOrEmpty($license.ProductName)) { $license.ProductName } else { $product.Name }
+        return [PSCustomObject]@{
+            ActivationId      = $outcomeActivationId
+            ProductName       = $outcomeProductName
+            VerificationState = 'Verified'
+            RestartRequired   = $false
+        }
     }
-    else
-    {
-        throw "Activation failed. Current status: $($license.LicenseStatus)"
-    }
+
+    throw "Activation failed. Current status: $($license.LicenseStatus)"
 }
