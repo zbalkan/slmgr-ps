@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-13
+
+### Added
+
+* Added `Set-WindowsActivationType` for configuring volume activation policy.
+* Added support for `Any`, `ActiveDirectory`, `Kms`, and `Token` activation policies.
+* Added service-wide and activation-ID-scoped activation policy configuration.
+* Added configured activation policy and last-used volume activation type to extended activation reporting.
+* Added Software Protection Platform contracts for `SetVLActivationTypeEnabled` and `ClearVLActivationTypeEnabled`.
+
+### Changed
+
+* Activation policy changes now use the standard `slmgr-ps.LicensingOperationResult` contract and batch error handling introduced in 1.5.0.
+* `Any` clears the activation-type restriction, while restricted policies use the provider-defined activation type values.
+* The module now exports `Set-WindowsActivationType` as its seventh public command.
+
 ## [1.5.0] - 2026-09-13
 
 ### Added
