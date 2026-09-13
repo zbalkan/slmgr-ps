@@ -1,4 +1,7 @@
 BeforeAll {
+    . $PSScriptRoot/../src/Private/New-LicensingOperationResult.ps1
+    . $PSScriptRoot/../src/Private/New-LicensingOperationError.ps1
+    . $PSScriptRoot/../src/Private/Complete-LicensingOperationBatch.ps1
     . $PSScriptRoot/../src/Public/Install-WindowsLicense.ps1
 
     function Get-LicenseFileContent { param([string[]]$Path) }
