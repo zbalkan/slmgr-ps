@@ -10,8 +10,9 @@ because the files must come from the target system's own Windows installation.
 .INPUTS
 None.
 .OUTPUTS
-None if successful. Throws after attempting every discovered license file when
-one or more files fail.
+slmgr-ps.LicensingOperationResult. Emits one result for localhost when the operation
+is attempted. Throws one aggregate error after attempting every discovered license
+file when one or more files fail.
 .EXAMPLE
 Repair-WindowsLicense -Verbose
 .LINK
@@ -19,6 +20,7 @@ https://github.com/zbalkan/slmgr-ps
 #>
 function Repair-WindowsLicense
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $false,
         ConfirmImpact = 'High')]
@@ -33,6 +35,7 @@ function Repair-WindowsLicense
     }
 
     $repairFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
+    $fileFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
     $session = $null
     try
     {
@@ -57,7 +60,7 @@ function Repair-WindowsLicense
                     'WindowsSystemLicenseRepairFailed',
                     [System.Management.Automation.ErrorCategory]::InvalidOperation,
                     $file.FullName)
-                $repairFailures.Add($errorRecord)
+                $fileFailures.Add($errorRecord)
             }
         }
 
@@ -76,7 +79,7 @@ function Repair-WindowsLicense
                     'WindowsSystemLicenseRefreshFailed',
                     [System.Management.Automation.ErrorCategory]::InvalidOperation,
                     'localhost')
-                $repairFailures.Add($errorRecord)
+                $fileFailures.Add($errorRecord)
             }
         }
     }
@@ -89,7 +92,7 @@ function Repair-WindowsLicense
             'WindowsSystemLicenseRepairStartFailed',
             [System.Management.Automation.ErrorCategory]::ConnectionError,
             'localhost')
-        $repairFailures.Add($errorRecord)
+        $fileFailures.Add($errorRecord)
     }
     finally
     {
@@ -99,12 +102,34 @@ function Repair-WindowsLicense
         }
     }
 
-    if ($repairFailures.Count -gt 0)
+    if ($fileFailures.Count -eq 0)
     {
-        foreach ($failure in $repairFailures)
-        {
-            Write-Error -ErrorRecord $failure
-        }
-        $PSCmdlet.ThrowTerminatingError($repairFailures[0])
+        New-LicensingOperationResult `
+            -ComputerName localhost `
+            -Operation RepairSystemLicenses `
+            -Success $true `
+            -VerificationState ProviderAccepted
     }
+    else
+    {
+        $innerExceptions = [System.Collections.Generic.List[System.Exception]]::new()
+        foreach ($failure in $fileFailures) { $innerExceptions.Add($failure.Exception) }
+        $targetException = [System.AggregateException]::new(
+            "$($fileFailures.Count) system license repair failure(s). First failure: $($fileFailures[0].Exception.Message)",
+            $innerExceptions.ToArray())
+        $targetException.Data['Failures'] = $fileFailures.ToArray()
+        $targetError = [System.Management.Automation.ErrorRecord]::new(
+            $targetException,
+            'WindowsSystemLicenseRepairFailed',
+            [System.Management.Automation.ErrorCategory]::InvalidOperation,
+            'localhost')
+        $structured = New-LicensingOperationError `
+            -ErrorRecord $targetError `
+            -ComputerName localhost `
+            -Operation RepairSystemLicenses
+        $repairFailures.Add($structured.ErrorRecord)
+        Write-Output $structured.Result
+    }
+
+    Complete-LicensingOperationBatch -Failures $repairFailures
 }
