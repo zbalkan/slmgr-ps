@@ -31,7 +31,7 @@ function Get-ADActivationObjectRecord
         $candidates = @(Get-ADObject @common -LDAPFilter '(objectClass=msSPP-ActivationObject)' -SearchBase $Context.ContainerDistinguishedName -SearchScope OneLevel -Properties $properties -ErrorAction Stop)
         if (-not [string]::IsNullOrWhiteSpace($Name))
         {
-            $candidates = @($candidates | Where-Object { $_.Name -ceq $Name })
+            $candidates = @($candidates | Where-Object { $_.Name -ieq $Name })
         }
     }
 
