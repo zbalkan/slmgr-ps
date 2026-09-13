@@ -6,10 +6,12 @@ Describe 'Get-WindowsActivation product targeting' {
     BeforeEach {
         $script:Session = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
         $script:Product = New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly
+        $script:Service = New-CimInstance -ClassName SoftwareLicensingService -ClientOnly
 
         Mock Get-Session -ModuleName slmgr-ps { $script:Session }
         Mock Remove-CimSession -ModuleName slmgr-ps {}
         Mock Get-WindowsLicensingProduct -ModuleName slmgr-ps { $script:Product }
+        Mock Get-CimInstance -ModuleName slmgr-ps { $script:Service }
         Mock Get-BasicLicenseInformation -ModuleName slmgr-ps { [PSCustomObject]@{ View = 'Basic' } }
         Mock Get-ExtendedLicenseInformation -ModuleName slmgr-ps { [PSCustomObject]@{ View = 'Extended' } }
         Mock Get-ExpiryInformation -ModuleName slmgr-ps { [PSCustomObject]@{ View = 'Expiry' } }
@@ -83,7 +85,12 @@ Describe 'Get-WindowsActivation product targeting' {
         $result = @(Get-WindowsActivation -Extended -All)
 
         $result.Count | Should -Be 2
-        Should -Invoke Get-ExtendedLicenseInformation -ModuleName slmgr-ps -Times 2
+        Should -Invoke Get-CimInstance -ModuleName slmgr-ps -Times 1 -ParameterFilter {
+            $ClassName -eq 'SoftwareLicensingService' -and $ErrorAction -eq 'Stop'
+        }
+        Should -Invoke Get-ExtendedLicenseInformation -ModuleName slmgr-ps -Times 2 -ParameterFilter {
+            $Service -eq $script:Service
+        }
     }
 
     It 'rejects all-products enumeration with an activation ID before opening a session' {

@@ -4,9 +4,9 @@
 .Synopsis
 Resets Windows activation settings.
 .DESCRIPTION
-A drop in replacement for slmgr /upk, /cpky and /ckms commands. Uninstalls the product key,
-clears it from the registry, and/or clears KMS settings. Multiple switches can be combined
-in a single call.
+A drop in replacement for slmgr /upk, /cpky, /ckms, and /ckms-domain commands. Uninstalls the product key,
+clears it from the registry, clears KMS host and port settings, and/or clears the KMS
+lookup domain. Multiple switches can be combined in a single call.
 .INPUTS
 string[]. You can pass the computer names.
 .OUTPUTS
@@ -17,6 +17,8 @@ Reset-WindowsActivation -UninstallProductKey -Verbose
 Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry -Verbose
 .EXAMPLE
 Reset-WindowsActivation -ClearKMSSettings -Verbose
+.EXAMPLE
+Reset-WindowsActivation -ClearKMSLookupDomain -Verbose
 .EXAMPLE
 Reset-WindowsActivation -UninstallProductKey -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
 .EXAMPLE
@@ -65,21 +67,30 @@ function Reset-WindowsActivation
         [switch]
         $ClearKMSSettings,
 
+        # Clear the KMS DNS lookup domain (slmgr /ckms-domain)
+        [Parameter(Mandatory = $false)]
+        [switch]
+        $ClearKMSLookupDomain,
+
         [Parameter(Mandatory = $false)]
         [Guid]
         $ActivationId
     )
     Begin
     {
-        if (-not $UninstallProductKey.IsPresent -and -not $ClearProductKeyFromRegistry.IsPresent -and -not $ClearKMSSettings.IsPresent)
+        if (-not $UninstallProductKey.IsPresent -and
+            -not $ClearProductKeyFromRegistry.IsPresent -and
+            -not $ClearKMSSettings.IsPresent -and
+            -not $ClearKMSLookupDomain.IsPresent)
         {
-            throw 'At least one reset operation must be specified: -UninstallProductKey, -ClearProductKeyFromRegistry, or -ClearKMSSettings.'
+            throw 'At least one reset operation must be specified: -UninstallProductKey, -ClearProductKeyFromRegistry, -ClearKMSSettings, or -ClearKMSLookupDomain.'
         }
         $hasActivationId = $PSBoundParameters.ContainsKey('ActivationId')
-        $hasTargetedOperation = $UninstallProductKey.IsPresent -or $ClearKMSSettings.IsPresent
+        $hasTargetedOperation = $UninstallProductKey.IsPresent -or
+            $ClearKMSSettings.IsPresent -or $ClearKMSLookupDomain.IsPresent
         if ($hasActivationId -and -not $hasTargetedOperation)
         {
-            throw 'ActivationId requires UninstallProductKey or ClearKMSSettings.'
+            throw 'ActivationId requires UninstallProductKey, ClearKMSSettings, or ClearKMSLookupDomain.'
         }
     }
     Process
@@ -107,6 +118,7 @@ function Reset-WindowsActivation
 
                 $requiresService = $ClearProductKeyFromRegistry.IsPresent
                 if ($ClearKMSSettings.IsPresent -and $null -eq $product) { $requiresService = $true }
+                if ($ClearKMSLookupDomain.IsPresent -and $null -eq $product) { $requiresService = $true }
                 if ($requiresService)
                 {
                     $service = Get-CimInstance -CimSession $session -ClassName SoftwareLicensingService -ErrorAction Stop
@@ -124,6 +136,13 @@ function Reset-WindowsActivation
                     $kmsTarget = if ($null -ne $product) { $product } else { $service }
                     $kmsTarget | Invoke-SppCimMethod -MethodName ClearKeyManagementServiceMachine
                     $kmsTarget | Invoke-SppCimMethod -MethodName ClearKeyManagementServicePort
+                }
+
+                if ($ClearKMSLookupDomain.IsPresent)
+                {
+                    Write-Verbose 'Clearing KMS lookup domain (slmgr /ckms-domain)'
+                    $kmsTarget = if ($null -ne $product) { $product } else { $service }
+                    $kmsTarget | Invoke-SppCimMethod -MethodName ClearKeyManagementServiceLookupDomain
                 }
 
                 # Uninstall last so combined product-scoped operations do not depend on a

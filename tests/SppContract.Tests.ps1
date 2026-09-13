@@ -13,6 +13,13 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
         }
     }
 
+    It 'exposes the service properties required for KMS client reporting' {
+        foreach ($property in $script:Contract.ServiceProperties)
+        {
+            $script:ServiceClass.CimClassProperties.Name | Should -Contain $property
+        }
+    }
+
     It 'exposes every method on each allowed licensing class' {
         foreach ($method in $script:Contract.Methods.Keys)
         {

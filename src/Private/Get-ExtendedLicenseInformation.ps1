@@ -4,7 +4,8 @@ function Get-ExtendedLicenseInformation
     [CmdletBinding()]
     param (
         [Microsoft.Management.Infrastructure.CimSession]$CimSession,
-        [CimInstance]$Product
+        [CimInstance]$Product,
+        [CimInstance]$Service
     )
 
     if ($null -eq $Product)
@@ -16,6 +17,17 @@ function Get-ExtendedLicenseInformation
     if ($null -ne $Product.TrustedTime)
     {
         $trustedTime = $Product.TrustedTime
+    }
+
+    $configuredKmsPort = $Product.KeyManagementServicePort
+    if ($configuredKmsPort -eq 0) { $configuredKmsPort = $null }
+    $discoveredKmsPort = $Product.DiscoveredKeyManagementServiceMachinePort
+    if ($discoveredKmsPort -eq 0) { $discoveredKmsPort = $null }
+    $kmsHostCaching = $null
+    if ($null -ne $Service -and
+        $null -ne $Service.PSObject.Properties['KeyManagementServiceHostCaching'])
+    {
+        $kmsHostCaching = if ($Service.KeyManagementServiceHostCaching) { 'Enabled' } else { 'Disabled' }
     }
 
     $result = [PSCustomObject]@{
@@ -33,6 +45,12 @@ function Get-ExtendedLicenseInformation
         RemainingWindowsRearmCount = $Product.RemainingAppReArmCount
         RemainingSkuRearmCount     = $Product.RemainingSkuReArmCount
         TrustedTime                = $trustedTime
+        ConfiguredKmsHost          = $Product.KeyManagementServiceMachine
+        ConfiguredKmsPort          = $configuredKmsPort
+        DiscoveredKmsHost          = $Product.DiscoveredKeyManagementServiceMachineName
+        DiscoveredKmsPort          = $discoveredKmsPort
+        KmsLookupDomain            = $Product.KeyManagementServiceLookupDomain
+        KmsHostCaching             = $kmsHostCaching
     }
     return $result
 }

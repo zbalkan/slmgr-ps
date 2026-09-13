@@ -10,7 +10,15 @@ function Get-SppContract
             'LicenseIsAddon',
             'LicenseStatus',
             'OfflineInstallationId',
-            'PartialProductKey'
+            'PartialProductKey',
+            'KeyManagementServiceMachine',
+            'KeyManagementServicePort',
+            'DiscoveredKeyManagementServiceMachineName',
+            'DiscoveredKeyManagementServiceMachinePort',
+            'KeyManagementServiceLookupDomain'
+        )
+        ServiceProperties = @(
+            'KeyManagementServiceHostCaching'
         )
         Methods = @{
             Activate = @{
@@ -18,6 +26,10 @@ function Get-SppContract
                 Arguments = @()
             }
             ClearKeyManagementServiceMachine = @{
+                Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+                Arguments = @()
+            }
+            ClearKeyManagementServiceLookupDomain = @{
                 Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
                 Arguments = @()
             }
@@ -35,7 +47,7 @@ function Get-SppContract
             }
             DisableKeyManagementServiceHostCaching = @{
                 Classes   = @('SoftwareLicensingService')
-                Arguments = @()
+                Arguments = @('DisableCaching')
             }
             InstallProductKey = @{
                 Classes   = @('SoftwareLicensingService')
@@ -64,6 +76,10 @@ function Get-SppContract
             SetKeyManagementServiceMachine = @{
                 Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
                 Arguments = @('MachineName')
+            }
+            SetKeyManagementServiceLookupDomain = @{
+                Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+                Arguments = @('LookupDomain')
             }
             SetKeyManagementServicePort = @{
                 Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
