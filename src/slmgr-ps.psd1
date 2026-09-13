@@ -35,7 +35,7 @@
     # Minimum version of the Windows PowerShell engine required by this module
     # PowerShellVersion = ''
 
-    # Name of the Windows PowerShell host required by the Windows PowerShell host required by this module
+    # Name of the Windows PowerShell host required by this module
     # PowerShellHostName = ''
 
     # Minimum version of the Windows PowerShell host required by this module
