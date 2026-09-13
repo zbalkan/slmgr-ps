@@ -24,12 +24,19 @@ function New-LicensingOperationError
 
     $errorCode = $null
     $candidateException = $ErrorRecord.Exception
+    $cimException = $null
     while ($null -ne $candidateException -and $null -eq $errorCode)
     {
         if ($null -ne $candidateException.Data -and $candidateException.Data.Contains('ErrorCode'))
         {
             $errorCode = [string]$candidateException.Data['ErrorCode']
             break
+        }
+
+        if ($null -eq $cimException -and
+            $candidateException -is [Microsoft.Management.Infrastructure.CimException])
+        {
+            $cimException = $candidateException
         }
 
         if ($candidateException -is [System.AggregateException] -and
@@ -43,11 +50,10 @@ function New-LicensingOperationError
         }
     }
 
-    if ($null -eq $errorCode -and $null -ne $ErrorRecord.Exception -and
-        $ErrorRecord.Exception.HResult -ne 0)
+    if ($null -eq $errorCode -and $null -ne $cimException -and $cimException.HResult -ne 0)
     {
         $unsignedHResult = [BitConverter]::ToUInt32(
-            [BitConverter]::GetBytes([int]$ErrorRecord.Exception.HResult), 0)
+            [BitConverter]::GetBytes([int]$cimException.HResult), 0)
         $errorCode = '0x{0:X8}' -f $unsignedHResult
     }
 
