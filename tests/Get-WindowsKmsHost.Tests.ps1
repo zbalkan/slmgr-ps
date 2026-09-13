@@ -46,6 +46,7 @@ Describe 'Get-WindowsKmsHost' {
         $result.DefaultRenewalInterval | Should -Be 10080
         $result.DnsPublishing | Should -Be 'Enabled'
         $result.Priority | Should -Be 'Normal'
+        $result.ActivationDisabled | Should -BeFalse
     }
 
     It 'reports an explicit listening-port override' {
@@ -63,6 +64,7 @@ Describe 'Get-WindowsKmsHost' {
         $result.ListeningPortConfigured | Should -BeTrue
         $result.ConfiguredListeningPort | Should -Be 2500
         $result.EffectiveListeningPort | Should -Be 2500
+        $result.ActivationDisabled | Should -BeNullOrEmpty
     }
 
     It 'cleans up the CIM session' {
