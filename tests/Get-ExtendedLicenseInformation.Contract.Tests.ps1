@@ -24,6 +24,10 @@ Describe 'Get-ExtendedLicenseInformation result contract' {
             TokenActivationGrantNumber            = [uint32]2
             TokenActivationCertificateThumbprint  = 'AABBCCDDEEFF'
             TokenActivationAdditionalInfo         = 'token metadata'
+            ADActivationObjectName                = 'Forest Activation'
+            ADActivationObjectDN                  = 'CN=Forest Activation,CN=Activation Objects,CN=Microsoft SPP,CN=Services,CN=Configuration,DC=example,DC=com'
+            ADActivationCsvlkPid                  = 'pid-value'
+            ADActivationCsvlkSkuId                = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         }
         $service = New-CimInstance -ClassName SoftwareLicensingService -ClientOnly -Property @{
             Version                       = '10.0-test'
@@ -53,6 +57,10 @@ Describe 'Get-ExtendedLicenseInformation result contract' {
         $result.TokenActivationGrantNumber | Should -Be 2
         $result.TokenActivationCertificateThumbprint | Should -Be 'AABBCCDDEEFF'
         $result.TokenActivationAdditionalInfo | Should -Be 'token metadata'
+        $result.ADActivationObjectName | Should -Be 'Forest Activation'
+        $result.ADActivationObjectDN | Should -Match '^CN=Forest Activation,'
+        $result.ADActivationCsvlkPid | Should -Be 'pid-value'
+        $result.ADActivationCsvlkSkuId | Should -Be 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
     }
 
     It 'keeps unset provider dates and unavailable service properties null' {
