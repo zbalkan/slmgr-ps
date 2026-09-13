@@ -27,6 +27,16 @@ function Get-ExtendedLicenseInformation
     $discoveredKmsPort = $Product.DiscoveredKeyManagementServiceMachinePort
     if ($discoveredKmsPort -eq 0) { $discoveredKmsPort = $null }
 
+    $configuredActivationTypeCode = $Product.VLActivationTypeEnabled
+    $configuredActivationType = switch ($configuredActivationTypeCode)
+    {
+        0 { 'Any' }
+        1 { 'ActiveDirectory' }
+        2 { 'Kms' }
+        3 { 'Token' }
+        default { $null }
+    }
+
     $kmsHostCaching = $null
     $serviceVersion = $null
     $clientMachineId = $null
@@ -57,36 +67,39 @@ function Get-ExtendedLicenseInformation
     }
 
     $result = [PSCustomObject]@{
-        Name                       = $Product.Name
-        Description                = $Product.Description
-        ActivationId               = $Product.ID
-        ApplicationId              = $Product.ApplicationID
-        ExtendedPid                = $Product.ProductKeyID
-        ProductKeyChannel          = $Product.ProductKeyChannel
-        InstallationId             = $Product.OfflineInstallationId
-        UseLicenseUrl              = $Product.UseLicenseURL
-        ValidationUrl              = $Product.ValidationURL
-        PartialProductKey          = $Product.PartialProductKey
-        LicenseStatusCode          = [uint32]$Product.LicenseStatus
-        LicenseStatus              = [LicenseStatusCode]($Product.LicenseStatus)
-        LicenseStatusReason        = $Product.LicenseStatusReason
-        GracePeriodRemaining       = $Product.GracePeriodRemaining
-        EvaluationEndDate          = $evaluationEndDate
-        RemainingWindowsRearmCount = $remainingWindowsRearmCount
-        RemainingAppRearmCount     = $Product.RemainingAppReArmCount
-        RemainingSkuRearmCount     = $Product.RemainingSkuReArmCount
-        TrustedTime                = $trustedTime
-        ServiceVersion             = $serviceVersion
-        ClientMachineId            = $clientMachineId
-        IsKmsHost                  = $isKmsHost
-        VlActivationInterval       = $Product.VLActivationInterval
-        VlRenewalInterval          = $Product.VLRenewalInterval
-        ConfiguredKmsHost          = $Product.KeyManagementServiceMachine
-        ConfiguredKmsPort          = $configuredKmsPort
-        DiscoveredKmsHost          = $Product.DiscoveredKeyManagementServiceMachineName
-        DiscoveredKmsPort          = $discoveredKmsPort
-        KmsLookupDomain            = $Product.KeyManagementServiceLookupDomain
-        KmsHostCaching             = $kmsHostCaching
+        Name                         = $Product.Name
+        Description                  = $Product.Description
+        ActivationId                 = $Product.ID
+        ApplicationId                = $Product.ApplicationID
+        ExtendedPid                  = $Product.ProductKeyID
+        ProductKeyChannel            = $Product.ProductKeyChannel
+        InstallationId               = $Product.OfflineInstallationId
+        UseLicenseUrl                = $Product.UseLicenseURL
+        ValidationUrl                = $Product.ValidationURL
+        PartialProductKey            = $Product.PartialProductKey
+        LicenseStatusCode            = [uint32]$Product.LicenseStatus
+        LicenseStatus                = [LicenseStatusCode]($Product.LicenseStatus)
+        LicenseStatusReason          = $Product.LicenseStatusReason
+        GracePeriodRemaining         = $Product.GracePeriodRemaining
+        EvaluationEndDate            = $evaluationEndDate
+        RemainingWindowsRearmCount   = $remainingWindowsRearmCount
+        RemainingAppRearmCount       = $Product.RemainingAppReArmCount
+        RemainingSkuRearmCount       = $Product.RemainingSkuReArmCount
+        TrustedTime                  = $trustedTime
+        ServiceVersion               = $serviceVersion
+        ClientMachineId              = $clientMachineId
+        IsKmsHost                    = $isKmsHost
+        VlActivationInterval         = $Product.VLActivationInterval
+        VlRenewalInterval            = $Product.VLRenewalInterval
+        LastVolumeActivationTypeCode = $Product.VLActivationType
+        ActivationTypePolicyCode     = $configuredActivationTypeCode
+        ActivationTypePolicy         = $configuredActivationType
+        ConfiguredKmsHost            = $Product.KeyManagementServiceMachine
+        ConfiguredKmsPort            = $configuredKmsPort
+        DiscoveredKmsHost            = $Product.DiscoveredKeyManagementServiceMachineName
+        DiscoveredKmsPort            = $discoveredKmsPort
+        KmsLookupDomain              = $Product.KeyManagementServiceLookupDomain
+        KmsHostCaching               = $kmsHostCaching
     }
     return $result
 }
