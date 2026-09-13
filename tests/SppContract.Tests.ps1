@@ -44,7 +44,7 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
         }
     }
 
-    It 'uses the documented provider argument names' {
+    It 'uses the documented provider input argument names' {
         foreach ($method in $script:Contract.Methods.Keys)
         {
             $expectedArguments = @($script:Contract.Methods[$method].Arguments)
@@ -58,12 +58,22 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
                 default { $script:ProductClass }
             }
             $declaration = @($class.CimClassMethods | Where-Object Name -eq $method)[0]
-            $actualArguments = @($declaration.Parameters.Name)
+            $actualArguments = @($declaration.Parameters | Where-Object {
+                    $inQualifier = $_.Qualifiers['In']
+                    $null -ne $inQualifier -and $inQualifier.Value
+                } | ForEach-Object Name)
             $actualArguments.Count | Should -Be $expectedArguments.Count
             foreach ($argument in $expectedArguments)
             {
                 $actualArguments | Should -Contain $argument
             }
         }
+    }
+
+    It 'exposes InstallationID as the AD offline activation output' {
+        $method = @($script:ServiceClass.CimClassMethods | Where-Object Name -eq 'GenerateActiveDirectoryOfflineActivationId')[0]
+        $output = @($method.Parameters | Where-Object Name -eq 'InstallationID')[0]
+        $output | Should -Not -BeNullOrEmpty
+        $output.Qualifiers['Out'].Value | Should -BeTrue
     }
 }
