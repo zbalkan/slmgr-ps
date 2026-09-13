@@ -13,6 +13,8 @@ function Get-LicenseStatus
     $status = [LicenseStatusCode]($product.LicenseStatus)
     $activated = $status -eq [LicenseStatusCode]::Licensed
     $result = [PSCustomObject]@{
+        ActivationId  = $product.ID
+        ProductName   = $product.Name
         LicenseStatus = $status
         Activated     = $activated
     }
