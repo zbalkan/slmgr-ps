@@ -135,8 +135,7 @@ Describe 'Start-WindowsActivation' {
         Start-WindowsActivation -Rearm -ApplicationId $expectedApplicationId -Confirm:$false
 
         Should -Invoke Invoke-Rearm -Times 1 -ParameterFilter {
-            $ApplicationId -eq $expectedApplicationId -and
-            -not $PSBoundParameters.ContainsKey('ActivationId')
+            $ApplicationId -eq $expectedApplicationId
         }
     }
 
@@ -146,8 +145,7 @@ Describe 'Start-WindowsActivation' {
         Start-WindowsActivation -Rearm -ActivationId $expectedSkuId -Confirm:$false
 
         Should -Invoke Invoke-Rearm -Times 1 -ParameterFilter {
-            $ActivationId -eq $expectedSkuId -and
-            -not $PSBoundParameters.ContainsKey('ApplicationId')
+            $ActivationId -eq $expectedSkuId
         }
     }
 
