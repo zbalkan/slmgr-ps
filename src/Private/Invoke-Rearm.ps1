@@ -3,8 +3,35 @@ function Invoke-Rearm
     [CmdletBinding()]
     param(
         [Microsoft.Management.Infrastructure.CimSession]$CimSession,
-        [CimInstance]$Service
+        [CimInstance]$Service,
+        [Guid]$ApplicationId,
+        [Guid]$ActivationId
     )
+
+    $hasApplicationId = $PSBoundParameters.ContainsKey('ApplicationId')
+    $hasActivationId = $PSBoundParameters.ContainsKey('ActivationId')
+    if ($hasApplicationId -and $hasActivationId)
+    {
+        throw 'ApplicationId and ActivationId cannot be used together for rearm.'
+    }
+
+    if ($hasApplicationId)
+    {
+        $Service | Invoke-SppCimMethod -MethodName ReArmApp `
+            -Arguments @{ ApplicationId = $ApplicationId.ToString() }
+        $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
+        Write-Verbose 'Application rearm completed. Restart the system for the change to take effect.'
+        return
+    }
+
+    if ($hasActivationId)
+    {
+        $product = Get-WindowsLicensingProduct -CimSession $CimSession -ActivationId $ActivationId
+        $product | Invoke-SppCimMethod -MethodName ReArmSku
+        $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
+        Write-Verbose 'SKU rearm completed. Restart the system for the change to take effect.'
+        return
+    }
 
     $licenseInfo = Get-LicenseStatus -CimSession $CimSession
     $status = $licenseInfo.LicenseStatus

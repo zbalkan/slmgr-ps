@@ -4,6 +4,7 @@ BeforeAll {
     function Get-Session {}
     function Invoke-OfflineActivation {}
     function Invoke-KMSActivation {}
+    function Invoke-Rearm {}
 
     $script:MockCimSession = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
     $script:Service = New-CimInstance -ClassName SoftwareLicensingService -ClientOnly
@@ -16,6 +17,7 @@ Describe 'Start-WindowsActivation' {
         Mock Get-CimInstance { $script:Service }
         Mock Remove-CimSession {}
         Mock Invoke-KMSActivation {}
+        Mock Invoke-Rearm {}
         Mock Invoke-OfflineActivation {
             $script:OfflineCall++
             if ($script:OfflineCall -eq 1)
@@ -84,12 +86,12 @@ Describe 'Start-WindowsActivation' {
     }
 
     It 'forwards an activation ID to the activation helper' {
-        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        $expectedActivationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 
-        Start-WindowsActivation -ActivationId $activationId -Confirm:$false
+        Start-WindowsActivation -ActivationId $expectedActivationId -Confirm:$false
 
         Should -Invoke Invoke-KMSActivation -Times 1 -ParameterFilter {
-            $ActivationId -eq $activationId
+            $ActivationId -eq $expectedActivationId
         }
     }
 
@@ -100,14 +102,14 @@ Describe 'Start-WindowsActivation' {
     }
 
     It 'forwards an activation ID to offline activation' {
-        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        $expectedActivationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         Mock Invoke-OfflineActivation {}
 
         Start-WindowsActivation -Offline -ConfirmationId ('1' * 54) `
-            -ActivationId $activationId -Confirm:$false
+            -ActivationId $expectedActivationId -Confirm:$false
 
         Should -Invoke Invoke-OfflineActivation -Times 1 -ParameterFilter {
-            $ActivationId -eq $activationId
+            $ActivationId -eq $expectedActivationId
         }
     }
 
@@ -123,6 +125,52 @@ Describe 'Start-WindowsActivation' {
         { Start-WindowsActivation -UseKmsClientKey `
                 -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false } |
             Should -Throw -ExpectedMessage '*InstallProductKey is service-scoped*'
+
+        Should -Invoke Get-Session -Times 0
+    }
+
+    It 'forwards an application ID to application rearm' {
+        $expectedApplicationId = [Guid]'11111111-2222-3333-4444-555555555555'
+
+        Start-WindowsActivation -Rearm -ApplicationId $expectedApplicationId -Confirm:$false
+
+        Should -Invoke Invoke-Rearm -Times 1 -ParameterFilter {
+            $ApplicationId -eq $expectedApplicationId -and
+            -not $PSBoundParameters.ContainsKey('ActivationId')
+        }
+    }
+
+    It 'forwards an activation ID to SKU rearm' {
+        $expectedSkuId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+
+        Start-WindowsActivation -Rearm -ActivationId $expectedSkuId -Confirm:$false
+
+        Should -Invoke Invoke-Rearm -Times 1 -ParameterFilter {
+            $ActivationId -eq $expectedSkuId -and
+            -not $PSBoundParameters.ContainsKey('ApplicationId')
+        }
+    }
+
+    It 'rejects both rearm identifiers before opening a session' {
+        { Start-WindowsActivation -Rearm `
+                -ApplicationId '11111111-2222-3333-4444-555555555555' `
+                -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false } |
+            Should -Throw -ExpectedMessage '*cannot be used together*'
+
+        Should -Invoke Get-Session -Times 0
+    }
+
+    It 'requires the rearm switch when a rearm identifier is supplied' {
+        { Start-WindowsActivation `
+                -ApplicationId '11111111-2222-3333-4444-555555555555' -Confirm:$false } |
+            Should -Throw -ExpectedMessage '*require the Rearm switch*'
+
+        Should -Invoke Get-Session -Times 0
+    }
+
+    It 'rejects a malformed application ID before opening a session' {
+        { Start-WindowsActivation -Rearm -ApplicationId 'not-a-guid' -Confirm:$false } |
+            Should -Throw
 
         Should -Invoke Get-Session -Times 0
     }
