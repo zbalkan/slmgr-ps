@@ -23,13 +23,28 @@ function New-LicensingOperationError
     )
 
     $errorCode = $null
-    if ($null -ne $ErrorRecord.Exception -and
-        $null -ne $ErrorRecord.Exception.Data -and
-        $ErrorRecord.Exception.Data.Contains('ErrorCode'))
+    $candidateException = $ErrorRecord.Exception
+    while ($null -ne $candidateException -and $null -eq $errorCode)
     {
-        $errorCode = [string]$ErrorRecord.Exception.Data['ErrorCode']
+        if ($null -ne $candidateException.Data -and $candidateException.Data.Contains('ErrorCode'))
+        {
+            $errorCode = [string]$candidateException.Data['ErrorCode']
+            break
+        }
+
+        if ($candidateException -is [System.AggregateException] -and
+            $candidateException.InnerExceptions.Count -gt 0)
+        {
+            $candidateException = $candidateException.InnerExceptions[0]
+        }
+        else
+        {
+            $candidateException = $candidateException.InnerException
+        }
     }
-    elseif ($null -ne $ErrorRecord.Exception -and $ErrorRecord.Exception.HResult -ne 0)
+
+    if ($null -eq $errorCode -and $null -ne $ErrorRecord.Exception -and
+        $ErrorRecord.Exception.HResult -ne 0)
     {
         $unsignedHResult = [BitConverter]::ToUInt32(
             [BitConverter]::GetBytes([int]$ErrorRecord.Exception.HResult), 0)
