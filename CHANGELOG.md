@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-13
+
+### Added
+
+* Added `Get-WindowsTokenActivationLicense` for listing token activation issuance licenses.
+* Added `Remove-WindowsTokenActivationLicense` for removing an exact issuance license by `ILID` and `ILVID`.
+* Added documented `SoftwareLicensingTokenActivationLicense` provider support, including the `Uninstall()` method.
+* Added token activation ILID, ILVID, grant number, certificate thumbprint, and additional information to extended activation reporting.
+* Added local and remote token-license management with credential support.
+
+### Changed
+
+* Token-license removal now uses the standard structured licensing result and batch error contracts.
+* Token-license removal verifies success by re-querying the exact `ILID` and `ILVID` pair after uninstall.
+* The module now exports nine public commands.
+
+### Security
+
+* Token activation PIN handling and certificate-driven activation are not implemented because the required workflow is not sufficiently documented through public interfaces.
+
 ## [1.6.0] - 2026-09-13
 
 ### Added
