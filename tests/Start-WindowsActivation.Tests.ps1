@@ -101,6 +101,7 @@ Describe 'Start-WindowsActivation' {
 
     It 'forwards an activation ID to offline activation' {
         $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        Mock Invoke-OfflineActivation {}
 
         Start-WindowsActivation -Offline -ConfirmationId ('1' * 54) `
             -ActivationId $activationId -Confirm:$false
