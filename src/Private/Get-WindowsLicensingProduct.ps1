@@ -29,6 +29,7 @@ function Get-WindowsLicensingProduct
         'LicenseStatusReason', 'GracePeriodRemaining', 'EvaluationEndDate',
         'RemainingAppReArmCount', 'RemainingSkuReArmCount', 'TrustedTime',
         'VLActivationInterval', 'VLRenewalInterval',
+        'VLActivationType', 'VLActivationTypeEnabled',
         'KeyManagementServiceMachine', 'KeyManagementServicePort',
         'DiscoveredKeyManagementServiceMachineName',
         'DiscoveredKeyManagementServiceMachinePort',
