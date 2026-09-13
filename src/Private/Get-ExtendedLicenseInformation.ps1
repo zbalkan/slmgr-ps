@@ -13,21 +13,47 @@ function Get-ExtendedLicenseInformation
         $Product = Get-WindowsLicensingProduct -CimSession $CimSession
     }
 
-    $trustedTime = [datetime]::MinValue
-    if ($null -ne $Product.TrustedTime)
+    $trustedTime = $Product.TrustedTime
+    if ($null -eq $trustedTime -or $trustedTime -eq [datetime]::MinValue) { $trustedTime = $null }
+
+    $evaluationEndDate = $Product.EvaluationEndDate
+    if ($null -eq $evaluationEndDate -or $evaluationEndDate -eq [datetime]::MinValue)
     {
-        $trustedTime = $Product.TrustedTime
+        $evaluationEndDate = $null
     }
 
     $configuredKmsPort = $Product.KeyManagementServicePort
     if ($configuredKmsPort -eq 0) { $configuredKmsPort = $null }
     $discoveredKmsPort = $Product.DiscoveredKeyManagementServiceMachinePort
     if ($discoveredKmsPort -eq 0) { $discoveredKmsPort = $null }
+
     $kmsHostCaching = $null
-    if ($null -ne $Service -and
-        $null -ne $Service.PSObject.Properties['KeyManagementServiceHostCaching'])
+    $serviceVersion = $null
+    $clientMachineId = $null
+    $remainingWindowsRearmCount = $null
+    $isKmsHost = $null
+    if ($null -ne $Service)
     {
-        $kmsHostCaching = if ($Service.KeyManagementServiceHostCaching) { 'Enabled' } else { 'Disabled' }
+        if ($null -ne $Service.PSObject.Properties['KeyManagementServiceHostCaching'])
+        {
+            $kmsHostCaching = if ($Service.KeyManagementServiceHostCaching) { 'Enabled' } else { 'Disabled' }
+        }
+        if ($null -ne $Service.PSObject.Properties['Version'])
+        {
+            $serviceVersion = $Service.Version
+        }
+        if ($null -ne $Service.PSObject.Properties['ClientMachineID'])
+        {
+            $clientMachineId = $Service.ClientMachineID
+        }
+        if ($null -ne $Service.PSObject.Properties['RemainingWindowsReArmCount'])
+        {
+            $remainingWindowsRearmCount = $Service.RemainingWindowsReArmCount
+        }
+        if ($null -ne $Service.PSObject.Properties['IsKeyManagementServiceMachine'])
+        {
+            $isKmsHost = [bool]$Service.IsKeyManagementServiceMachine
+        }
     }
 
     $result = [PSCustomObject]@{
@@ -41,10 +67,20 @@ function Get-ExtendedLicenseInformation
         UseLicenseUrl              = $Product.UseLicenseURL
         ValidationUrl              = $Product.ValidationURL
         PartialProductKey          = $Product.PartialProductKey
+        LicenseStatusCode          = [uint32]$Product.LicenseStatus
         LicenseStatus              = [LicenseStatusCode]($Product.LicenseStatus)
-        RemainingWindowsRearmCount = $Product.RemainingAppReArmCount
+        LicenseStatusReason        = $Product.LicenseStatusReason
+        GracePeriodRemaining       = $Product.GracePeriodRemaining
+        EvaluationEndDate          = $evaluationEndDate
+        RemainingWindowsRearmCount = $remainingWindowsRearmCount
+        RemainingAppRearmCount     = $Product.RemainingAppReArmCount
         RemainingSkuRearmCount     = $Product.RemainingSkuReArmCount
         TrustedTime                = $trustedTime
+        ServiceVersion             = $serviceVersion
+        ClientMachineId            = $clientMachineId
+        IsKmsHost                  = $isKmsHost
+        VlActivationInterval       = $Product.VLActivationInterval
+        VlRenewalInterval          = $Product.VLRenewalInterval
         ConfiguredKmsHost          = $Product.KeyManagementServiceMachine
         ConfiguredKmsPort          = $configuredKmsPort
         DiscoveredKmsHost          = $Product.DiscoveredKeyManagementServiceMachineName
