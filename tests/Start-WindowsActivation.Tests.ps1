@@ -1,10 +1,26 @@
 BeforeAll {
     . $PSScriptRoot/../src/Public/Start-WindowsActivation.ps1
 
-    function Get-Session {}
-    function Invoke-OfflineActivation {}
-    function Invoke-KMSActivation {}
-    function Invoke-Rearm {}
+    function Get-Session {
+        param($Computer, $Credentials)
+    }
+    function Invoke-OfflineActivation {
+        param($CimSession, $Service, [string]$ConfirmationId, [Guid]$ActivationId)
+    }
+    function Invoke-KMSActivation {
+        param(
+            $CimSession,
+            $Service,
+            [string]$KMSServerFQDN,
+            [int]$KMSServerPort,
+            [switch]$InstallKmsClientKey,
+            [string]$ProductKey,
+            [Guid]$ActivationId
+        )
+    }
+    function Invoke-Rearm {
+        param($CimSession, $Service, [Guid]$ApplicationId, [Guid]$ActivationId)
+    }
 
     $script:MockCimSession = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
     $script:Service = New-CimInstance -ClassName SoftwareLicensingService -ClientOnly
@@ -86,12 +102,10 @@ Describe 'Start-WindowsActivation' {
     }
 
     It 'forwards an activation ID to the activation helper' {
-        $expectedActivationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
-
-        Start-WindowsActivation -ActivationId $expectedActivationId -Confirm:$false
+        Start-WindowsActivation -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false
 
         Should -Invoke Invoke-KMSActivation -Times 1 -ParameterFilter {
-            $ActivationId -eq $expectedActivationId
+            $ActivationId -eq [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         }
     }
 
@@ -102,14 +116,13 @@ Describe 'Start-WindowsActivation' {
     }
 
     It 'forwards an activation ID to offline activation' {
-        $expectedActivationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         Mock Invoke-OfflineActivation {}
 
         Start-WindowsActivation -Offline -ConfirmationId ('1' * 54) `
-            -ActivationId $expectedActivationId -Confirm:$false
+            -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false
 
         Should -Invoke Invoke-OfflineActivation -Times 1 -ParameterFilter {
-            $ActivationId -eq $expectedActivationId
+            $ActivationId -eq [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         }
     }
 
@@ -130,22 +143,20 @@ Describe 'Start-WindowsActivation' {
     }
 
     It 'forwards an application ID to application rearm' {
-        $expectedApplicationId = [Guid]'11111111-2222-3333-4444-555555555555'
-
-        Start-WindowsActivation -Rearm -ApplicationId $expectedApplicationId -Confirm:$false
+        Start-WindowsActivation -Rearm `
+            -ApplicationId '11111111-2222-3333-4444-555555555555' -Confirm:$false
 
         Should -Invoke Invoke-Rearm -Times 1 -ParameterFilter {
-            $ApplicationId -eq $expectedApplicationId
+            $ApplicationId -eq [Guid]'11111111-2222-3333-4444-555555555555'
         }
     }
 
     It 'forwards an activation ID to SKU rearm' {
-        $expectedSkuId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
-
-        Start-WindowsActivation -Rearm -ActivationId $expectedSkuId -Confirm:$false
+        Start-WindowsActivation -Rearm `
+            -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false
 
         Should -Invoke Invoke-Rearm -Times 1 -ParameterFilter {
-            $ActivationId -eq $expectedSkuId
+            $ActivationId -eq [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         }
     }
 

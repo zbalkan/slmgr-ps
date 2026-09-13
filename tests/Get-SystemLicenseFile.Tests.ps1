@@ -4,13 +4,14 @@ BeforeAll {
 
 Describe 'Get-SystemLicenseFile' {
     It 'returns license files from OEM and SPP token directories in deterministic order' {
-        $oemPath = New-Item -ItemType Directory -Path (Join-Path $TestDrive 'System32\oem') -Force
-        $tokenPath = New-Item -ItemType Directory -Path (Join-Path $TestDrive 'System32\spp\tokens\nested') -Force
+        $systemRoot = Join-Path $TestDrive 'deterministic'
+        $oemPath = New-Item -ItemType Directory -Path (Join-Path $systemRoot 'System32\oem') -Force
+        $tokenPath = New-Item -ItemType Directory -Path (Join-Path $systemRoot 'System32\spp\tokens\nested') -Force
         [System.IO.File]::WriteAllText((Join-Path $oemPath.FullName 'z.xrm-ms'), 'z')
         [System.IO.File]::WriteAllText((Join-Path $tokenPath.FullName 'a.xrm-ms'), 'a')
         [System.IO.File]::WriteAllText((Join-Path $tokenPath.FullName 'ignored.xml'), 'ignored')
 
-        $result = @(Get-SystemLicenseFile -SystemRoot $TestDrive)
+        $result = @(Get-SystemLicenseFile -SystemRoot $systemRoot)
 
         $result.Count | Should -Be 2
         $result[0].Name | Should -Be 'z.xrm-ms'
@@ -19,16 +20,18 @@ Describe 'Get-SystemLicenseFile' {
     }
 
     It 'ignores a missing candidate directory when the other contains licenses' {
-        $tokenPath = New-Item -ItemType Directory -Path (Join-Path $TestDrive 'System32\spp\tokens') -Force
+        $systemRoot = Join-Path $TestDrive 'single-root'
+        $tokenPath = New-Item -ItemType Directory -Path (Join-Path $systemRoot 'System32\spp\tokens') -Force
         [System.IO.File]::WriteAllText((Join-Path $tokenPath.FullName 'license.xrm-ms'), 'license')
 
-        @(Get-SystemLicenseFile -SystemRoot $TestDrive).Count | Should -Be 1
+        @(Get-SystemLicenseFile -SystemRoot $systemRoot).Count | Should -Be 1
     }
 
     It 'throws when no system license files are found' {
-        New-Item -ItemType Directory -Path (Join-Path $TestDrive 'System32\oem') -Force | Out-Null
+        $systemRoot = Join-Path $TestDrive 'empty'
+        New-Item -ItemType Directory -Path (Join-Path $systemRoot 'System32\oem') -Force | Out-Null
 
-        { Get-SystemLicenseFile -SystemRoot $TestDrive } |
+        { Get-SystemLicenseFile -SystemRoot $systemRoot } |
             Should -Throw -ExpectedMessage '*No system license files were found*'
     }
 
