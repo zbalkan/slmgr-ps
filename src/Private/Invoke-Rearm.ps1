@@ -21,7 +21,12 @@ function Invoke-Rearm
             -Arguments @{ ApplicationId = $ApplicationId.ToString() }
         $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
         Write-Verbose 'Application rearm completed. Restart the system for the change to take effect.'
-        return
+        return [PSCustomObject]@{
+            ActivationId      = $null
+            ProductName       = $null
+            VerificationState = 'ProviderAccepted'
+            RestartRequired   = $true
+        }
     }
 
     if ($hasActivationId)
@@ -30,7 +35,12 @@ function Invoke-Rearm
         $product | Invoke-SppCimMethod -MethodName ReArmSku
         $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
         Write-Verbose 'SKU rearm completed. Restart the system for the change to take effect.'
-        return
+        return [PSCustomObject]@{
+            ActivationId      = $ActivationId
+            ProductName       = $product.Name
+            VerificationState = 'ProviderAccepted'
+            RestartRequired   = $true
+        }
     }
 
     $licenseInfo = Get-LicenseStatus -CimSession $CimSession
@@ -42,7 +52,6 @@ function Invoke-Rearm
 
     Write-Verbose "Current license status: $status"
 
-    # Rearm is only meaningful for grace and non-genuine states
     $rearmableStatuses = @(
         [LicenseStatusCode]::OOBGrace,
         [LicenseStatusCode]::OOTGrace,
@@ -55,10 +64,21 @@ function Invoke-Rearm
     if (-not $isRearmable)
     {
         Write-Warning "Rearm is not applicable for the current license status: $status"
-        return
+        return [PSCustomObject]@{
+            ActivationId      = $licenseInfo.ActivationId
+            ProductName       = $licenseInfo.ProductName
+            VerificationState = 'Verified'
+            RestartRequired   = $false
+        }
     }
 
     $Service | Invoke-SppCimMethod -MethodName ReArmWindows
     $Service | Invoke-SppCimMethod -MethodName RefreshLicenseStatus
     Write-Verbose 'Rearm completed. Please restart the system for the changes to take effect.'
+    return [PSCustomObject]@{
+        ActivationId      = $licenseInfo.ActivationId
+        ProductName       = $licenseInfo.ProductName
+        VerificationState = 'ProviderAccepted'
+        RestartRequired   = $true
+    }
 }
