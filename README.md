@@ -2,7 +2,7 @@
 
 A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
-`slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows licensing and activation operations, including licensing status, online and offline activation, license installation and repair, rearm, product-key removal, KMS client configuration, activation-type policy, token issuance-license management, and documented Active Directory-based activation workflows.
+`slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows licensing and activation operations, including licensing status, online and offline activation, license installation and repair, rearm, product-key removal, KMS client and host configuration, activation-type policy, token issuance-license management, and documented Active Directory-based activation workflows.
 
 ## About this module
 
@@ -26,11 +26,12 @@ Microsoft now provides the official [OSLicense PowerShell module](https://learn.
 
 ## Current scope
 
-The module currently exports thirteen public functions:
+The module currently exports fifteen public functions:
 
 - `Get-WindowsActivation`
 - `Get-WindowsADActivationInstallationId`
 - `Get-WindowsADActivationObject`
+- `Get-WindowsKmsHost`
 - `Get-WindowsTokenActivationLicense`
 - `Install-WindowsLicense`
 - `New-WindowsADActivationObject`
@@ -40,9 +41,10 @@ The module currently exports thirteen public functions:
 - `Reset-WindowsActivation`
 - `Set-WindowsActivationType`
 - `Set-WindowsKmsClient`
+- `Set-WindowsKmsHost`
 - `Start-WindowsActivation`
 
-The implementation supports default, activation-ID, and all-product client queries; targeted client activation and reset operations; KMS client configuration; activation-type policy; license installation; local system-license repair; targeted rearm; token issuance-license listing and removal; and documented Active Directory activation-object workflows. KMS host configuration and token certificate/PIN activation remain outside the supported surface.
+The implementation supports default, activation-ID, and all-product client queries; targeted client activation and reset operations; KMS client and host configuration; activation-type policy; license installation; local system-license repair; targeted rearm; token issuance-license listing and removal; and documented Active Directory activation-object workflows. Token certificate/PIN activation remains outside the supported surface.
 
 ## Installation
 
@@ -154,6 +156,46 @@ Set-WindowsKmsClient -KmsServer kms01 -Port 2500 `
 `-KmsServer` accepts a single-label hostname, FQDN, IPv4 address, or bracketed IPv6 address. A port can be embedded in the endpoint or supplied with `-Port`, but not both. Changing a server without specifying a port sets port 1688 so a stale custom port is not retained. `-HostCaching` is service-wide and therefore cannot be combined with `-ActivationId`.
 
 `Start-WindowsActivation -KmsServer ...` preserves the combined configuration-and-activation workflow. `-KMSServerFQDN` remains an accepted parameter name for compatibility.
+
+### Configure and inspect a KMS host
+
+```powershell
+# Report KMS host state and request counters
+Get-WindowsKmsHost
+
+# Query a remote KMS host
+Get-WindowsKmsHost -Computer KMS01 -Credentials (Get-Credential)
+
+# Configure the listening port
+Set-WindowsKmsHost -ListeningPort 1688
+
+# Clear an explicit listening-port override and return to the documented default
+Set-WindowsKmsHost -ClearListeningPort
+
+# Set the pre-activation and renewal intervals in minutes
+Set-WindowsKmsHost -ActivationInterval 120 -RenewalInterval 10080
+
+# Enable or disable DNS publishing
+Set-WindowsKmsHost -DnsPublishing Enabled
+Set-WindowsKmsHost -DnsPublishing Disabled
+
+# Run the KMS service at normal or low priority
+Set-WindowsKmsHost -Priority Normal
+Set-WindowsKmsHost -Priority Low
+
+# Apply several host settings in one invocation
+Set-WindowsKmsHost -ListeningPort 1688 `
+    -ActivationInterval 120 `
+    -RenewalInterval 10080 `
+    -DnsPublishing Enabled `
+    -Priority Normal
+```
+
+`Get-WindowsKmsHost` requires the target to report itself as an enabled KMS host. It returns the current listening port, DNS-publishing and priority state, activation and renewal intervals, KMS client counts, KMS product-key ID, activation-disabled state, and documented request counters. A cleared listening-port override is reported separately from the effective default port 1688. Current interval values are reported alongside the documented defaults of 120 minutes for activation and 10,080 minutes for renewal because SPP does not expose a separate “configured override” flag for those interval properties.
+
+`Set-WindowsKmsHost` validates host capability before invoking any host-only method. Listening ports must be between 1 and 65535; activation and renewal intervals must be between 15 and 43,200 minutes. Each requested setting is applied in deterministic order and re-read from `SoftwareLicensingService`; successful settings return `Verified`. Combined settings are not transactional, so a later failure does not roll back earlier successful changes. The final aggregate error preserves those partial-completion results.
+
+KMS host mutations use `ShouldProcess` with high confirmation impact. Client configuration remains in `Set-WindowsKmsClient`; host configuration remains in `Set-WindowsKmsHost` so the two roles are not conflated.
 
 ### Configure volume activation policy
 
@@ -306,7 +348,7 @@ Reset-WindowsActivation -Computer WS01 -Credentials (Get-Credential) -UninstallP
 
 ### Operation results and errors
 
-Mutating commands emit a `slmgr-ps.LicensingOperationResult` when they use the common licensing mutation contract. The contract is used across activation, rearm, KMS client configuration, activation-type policy, reset, license installation, system-license repair, token issuance-license removal, and Active Directory activation-object mutation.
+Mutating commands emit a `slmgr-ps.LicensingOperationResult` when they use the common licensing mutation contract. The contract is used across activation, rearm, KMS client and host configuration, activation-type policy, reset, license installation, system-license repair, token issuance-license removal, and Active Directory activation-object mutation.
 
 | Field | Meaning |
 | --- | --- |
@@ -322,7 +364,7 @@ Mutating commands emit a `slmgr-ps.LicensingOperationResult` when they use the c
 
 `Verified` means the module queried a reliable final state and confirmed the intended outcome. `ProviderAccepted` means the documented provider call succeeded but the final state cannot yet be established reliably, such as a rearm operation that requires restart. `NotVerifiable` is reserved for successful operations for which the provider exposes no reliable read-back path. `Failed` identifies a failed target.
 
-For multi-computer operations, the module continues with later targets when it is safe to do so. If any target fails, the command terminates after the batch with a `LicensingBatchFailed` error. Its `TargetObject` contains the failed `LicensingOperationResult` objects, and detailed per-target errors are retained in the exception data. The module does not write the same collected failure repeatedly before throwing the aggregate error.
+For multi-computer operations, the module continues with later targets when it is safe to do so. If any target or individual KMS host setting fails, the command terminates after the applicable batch with a `LicensingBatchFailed` error. Its `TargetObject` contains the failed `LicensingOperationResult` objects, and detailed errors are retained in exception data. Successful settings are not rolled back when a later independent KMS host setting fails.
 
 ## Comparison with slmgr.vbs
 
@@ -400,15 +442,15 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 ### KMS server configuration options
 
-| `slmgr.vbs` option | `slmgr-ps` equivalent |          Status | Notes                                                                  |
-| ------------------ | --------------------- | --------------: | ---------------------------------------------------------------------- |
-| `/sai <Interval>`  | None                  | Not implemented | KMS host activation interval configuration is not currently supported. |
-| `/sri <Interval>`  | None                  | Not implemented | KMS host renewal interval configuration is not currently supported.    |
-| `/sprt <Port>`     | None                  | Not implemented | KMS host listening-port configuration is not currently supported.      |
-| `/sdns`            | None                  | Not implemented | KMS host DNS publishing enable is not currently supported.             |
-| `/cdns`            | None                  | Not implemented | KMS host DNS publishing disable is not currently supported.            |
-| `/spri`            | None                  | Not implemented | KMS host normal-priority configuration is not currently supported.     |
-| `/cpri`            | None                  | Not implemented | KMS host low-priority configuration is not currently supported.        |
+| `slmgr.vbs` option | `slmgr-ps` equivalent                                      |                Status | Notes                                                                                          |
+| ------------------ | ---------------------------------------------------------- | --------------------: | ---------------------------------------------------------------------------------------------- |
+| `/sai <Interval>`  | `Set-WindowsKmsHost -ActivationInterval <Interval>`        |             Supported | Accepts the documented 15–43,200 minute range.                                                 |
+| `/sri <Interval>`  | `Set-WindowsKmsHost -RenewalInterval <Interval>`           |             Supported | Accepts the documented 15–43,200 minute range.                                                 |
+| `/sprt <Port>`     | `Set-WindowsKmsHost -ListeningPort <Port>`                 |             Supported | Configures the host listening port; the documented default is 1688.                             |
+| `/sdns`            | `Set-WindowsKmsHost -DnsPublishing Enabled`                | Supported differently | Uses an explicit readable state instead of opposing switches.                                  |
+| `/cdns`            | `Set-WindowsKmsHost -DnsPublishing Disabled`               | Supported differently | Uses an explicit readable state instead of opposing switches.                                  |
+| `/spri`            | `Set-WindowsKmsHost -Priority Normal`                      | Supported differently | Uses an explicit readable state instead of opposing switches.                                  |
+| `/cpri`            | `Set-WindowsKmsHost -Priority Low`                         | Supported differently | Uses an explicit readable state instead of opposing switches.                                  |
 
 ### Token-based activation options
 
@@ -424,16 +466,16 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 ### Active Directory-based activation options
 
-| `slmgr.vbs` option                                                                  | `slmgr-ps` equivalent                                                                                               |                Status | Notes                                                                                                     |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------: | --------------------------------------------------------------------------------------------------------- |
-| `/ad-activation-online <Product Key>`                                               | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                               | Supported differently | `slmgr-ps` requires an explicit object name so duplicate detection and post-create verification are exact. |
-| `/ad-activation-online <Product Key> <Activation Object name>`                      | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                               |             Supported | Creates and verifies the named activation object.                                                          |
-| `/ad-activation-get-iid <Product Key>`                                              | `Get-WindowsADActivationInstallationId -ProductKey <ProductKey>`                                                     |             Supported | Returns structured installation-ID output for a resumable offline workflow.                               |
+| `slmgr.vbs` option                                                                  | `slmgr-ps` equivalent                                                                                                  |                Status | Notes                                                                                                      |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------: | ---------------------------------------------------------------------------------------------------------- |
+| `/ad-activation-online <Product Key>`                                               | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                                  | Supported differently | `slmgr-ps` requires an explicit object name so duplicate detection and post-create verification are exact. |
+| `/ad-activation-online <Product Key> <Activation Object name>`                      | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                                  |             Supported | Creates and verifies the named activation object.                                                          |
+| `/ad-activation-get-iid <Product Key>`                                              | `Get-WindowsADActivationInstallationId -ProductKey <ProductKey>`                                                       |             Supported | Returns structured installation-ID output for a resumable offline workflow.                               |
 | `/ad-activation-apply-cid <Product Key> <Confirmation ID>`                          | `New-WindowsADActivationObject -ProductKey <ProductKey> -ConfirmationId <ConfirmationId> -ActivationObjectName <Name>` | Supported differently | `slmgr-ps` requires an explicit object name.                                                               |
 | `/ad-activation-apply-cid <Product Key> <Confirmation ID> <Activation Object name>` | `New-WindowsADActivationObject -ProductKey <ProductKey> -ConfirmationId <ConfirmationId> -ActivationObjectName <Name>` |             Supported | Deposits the confirmation ID and verifies the named object.                                               |
-| `/ao-list`                                                                          | `Get-WindowsADActivationObject`                                                                                      |             Supported | Returns structured activation-object records from the AD configuration partition.                        |
-| `/del-ao <AO_DN>`                                                                   | `Remove-WindowsADActivationObject -DistinguishedName <AO_DN>`                                                       |             Supported | Requires the exact distinguished name and high-impact confirmation.                                       |
-| `/del-ao <AO_RDN>`                                                                  | None                                                                                                                 | Deliberately unsupported | RDN-only deletion is intentionally rejected to avoid ambiguous directory mutations.                    |
+| `/ao-list`                                                                          | `Get-WindowsADActivationObject`                                                                                        |             Supported | Returns structured activation-object records from the AD configuration partition.                        |
+| `/del-ao <AO_DN>`                                                                   | `Remove-WindowsADActivationObject -DistinguishedName <AO_DN>`                                                         |             Supported | Requires the exact distinguished name and high-impact confirmation.                                       |
+| `/del-ao <AO_RDN>`                                                                  | None                                                                                                                   | Deliberately unsupported | RDN-only deletion is intentionally rejected to avoid ambiguous directory mutations.                    |
 
 ## Design differences from slmgr.vbs
 
@@ -443,6 +485,7 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 - It uses `PSCredential` rather than command-line password arguments.
 - It uses CIM sessions for Software Protection Platform remote operations.
 - Remote CIM execution uses WinRM.
+- KMS client and KMS host configuration are separate commands so client-only settings cannot be confused with host-only methods.
 - Active Directory activation-object operations use the ActiveDirectory PowerShell module and directory credentials separately from CIM.
 - It returns PowerShell objects for reporting commands and stable operation-result objects for mutating commands.
 - It supports PowerShell pipeline-friendly usage.
@@ -457,11 +500,11 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 The following areas are intentionally not presented as supported yet:
 
-- KMS server configuration, including listening port, DNS publishing, intervals, and process priority.
 - Remote system-license repair; `Repair-WindowsLicense` is local-only by design.
 - Token activation certificate listing and certificate/PIN-driven activation.
 - RDN-only Active Directory activation-object deletion; an exact distinguished name is required.
 - Active Directory activation-object operations require the ActiveDirectory PowerShell module and appropriate forest connectivity and privileges.
+- KMS host mutations require a target that reports `IsKeyManagementServiceMachine = 1`; host behavior still requires real-host integration testing in an isolated environment.
 - `slmgr.vbs` command-line syntax compatibility.
 
 ## Security notes
@@ -470,7 +513,7 @@ Avoid passing secrets directly on the command line. `slmgr.vbs` supports a comma
 
 Explicit product keys and confirmation IDs remain plain command-line input and may be retained in PowerShell history. Protect shell history and automation logs, and avoid recording full invocations containing those values in shared diagnostics. The module does not intentionally include those secrets in normal result objects or routine provider-error metadata.
 
-Token PIN handling is deliberately unsupported rather than routed through undocumented interfaces. Active Directory activation-object deletion requires an exact resolved distinguished name and high-impact `ShouldProcess` confirmation.
+Token PIN handling is deliberately unsupported rather than routed through undocumented interfaces. Active Directory activation-object deletion requires an exact resolved distinguished name and high-impact `ShouldProcess` confirmation. KMS host mutation also uses high-impact `ShouldProcess` and refuses targets that do not identify themselves as enabled KMS hosts.
 
 For calls containing multiple computers or license files, mutating commands attempt every applicable item before reporting collected failures. Successful targets emit normal operation-result objects. Failed targets are represented in the final `LicensingBatchFailed` error, so automation must treat the invocation as failed even when later operations succeeded.
 
@@ -482,12 +525,14 @@ Use `-Verbose` for operational detail:
 
 ```powershell
 Get-WindowsActivation -Verbose
+Get-WindowsKmsHost -Verbose
 Get-WindowsTokenActivationLicense -Verbose
 Get-WindowsADActivationObject -Verbose
 Install-WindowsLicense -Path C:\Licenses\example.xrm-ms -Verbose
 Repair-WindowsLicense -Verbose
 Set-WindowsActivationType -ActivationType Kms -Verbose
 Set-WindowsKmsClient -KmsServer kms01.example.test -Verbose
+Set-WindowsKmsHost -ListeningPort 1688 -Verbose
 Start-WindowsActivation -Verbose
 Reset-WindowsActivation -Verbose -ClearKMSSettings
 ```
@@ -506,7 +551,7 @@ The long-term goal is to cover more of the practical `slmgr.vbs` workflow surfac
 
 Useful contribution areas include:
 
-- Adding KMS server configuration workflows after the client capability path is complete.
+- Adding real KMS host integration tests for supported host methods and provider behavior.
 - Adding tests for CIM provider compatibility across supported Windows versions.
 - Adding Active Directory integration tests for forest reachability, duplicate objects, privileges, and verified publication/deletion.
 - Improving documentation and examples.
