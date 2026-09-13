@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-09-13
+
+### Added
+
+* Added a declarative `tests/PublicContract.psd1` inventory for the established 1.x exported functions, public parameters, compatibility aliases, `ShouldProcess` expectations, and stable licensing-operation result contract.
+* Added an opt-in integration matrix for local DCOM, remote WinRM, explicit credentials, KMS-host reporting, token provider access, and Active Directory activation-object enumeration.
+* Added an explicitly gated KMS-host mutation/read-back integration path for isolated validation environments.
+
+### Changed
+
+* CI now consumes the shared public-contract definition instead of maintaining a separate hard-coded export list.
+* Standard CI explicitly excludes tests tagged `Integration`; real-environment validation is invoked separately through `tests/Integration/Invoke-IntegrationMatrix.ps1`.
+* Result-contract regression tests now consume the same declarative public contract used for command-surface validation.
+
 ## [1.9.1] - 2026-09-13
 
 ### Added
@@ -217,7 +231,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added product-key uninstallation through `-UninstallProductKey`.
 * Added product-key removal from registry storage through `-ClearProductKeyFromRegistry`.
 * Added KMS client reset through `-ClearKMSSettings`.
-* Added support for combining reset operations in a single invocation.
+* Added support for combining reset operations in a single call.
 * Added local and remote reset operations using `-Computer` and `-Credentials`.
 * Added `ShouldProcess`, `-WhatIf`, and `-Confirm` support for reset operations.
 * Added Pester coverage for the new reset command.

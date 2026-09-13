@@ -1,44 +1,64 @@
 BeforeAll {
+    $script:Contract = Import-PowerShellDataFile $PSScriptRoot/PublicContract.psd1
     Import-Module $PSScriptRoot/../src/slmgr-ps.psd1 -Force
 }
 
 Describe 'Public command contract stability' {
-    It 'preserves established public parameter names' {
-        $requiredParameters = @{
-            'Get-WindowsActivation' = @('Computer', 'Credentials', 'Extended', 'Expiry', 'Offline', 'ActivationId', 'All')
-            'Get-WindowsADActivationInstallationId' = @('ProductKey')
-            'Get-WindowsADActivationObject' = @('Name', 'DistinguishedName', 'DirectoryServer', 'DirectoryCredential')
-            'Get-WindowsKmsHost' = @('Computer', 'Credentials')
-            'Get-WindowsTokenActivationLicense' = @('Computer', 'Credentials')
-            'Install-WindowsLicense' = @('Computer', 'Credentials', 'Path')
-            'New-WindowsADActivationObject' = @('ProductKey', 'ActivationObjectName', 'ConfirmationId', 'DirectoryServer', 'DirectoryCredential')
-            'Remove-WindowsADActivationObject' = @('DistinguishedName', 'DirectoryServer', 'DirectoryCredential')
-            'Remove-WindowsTokenActivationLicense' = @('Computer', 'Credentials', 'ILID', 'ILVID')
-            'Reset-WindowsActivation' = @('Computer', 'Credentials', 'UninstallProductKey', 'ClearProductKeyFromRegistry', 'ClearKMSSettings', 'ClearKMSLookupDomain', 'ActivationId')
-            'Set-WindowsActivationType' = @('Computer', 'Credentials', 'ActivationType', 'ActivationId')
-            'Set-WindowsKmsClient' = @('Computer', 'Credentials', 'KmsServer', 'Port', 'LookupDomain', 'HostCaching', 'ActivationId')
-            'Set-WindowsKmsHost' = @('Computer', 'Credentials', 'ListeningPort', 'ClearListeningPort', 'ActivationInterval', 'RenewalInterval', 'DnsPublishing', 'Priority')
-            'Start-WindowsActivation' = @('Computer', 'Credentials', 'KMSServerFQDN', 'KMSServerPort', 'Rearm', 'ApplicationId', 'CacheDisabled', 'UseKmsClientKey', 'ProductKey', 'ActivationId', 'Offline', 'ConfirmationId')
-        }
+    It 'exports exactly the functions declared by the 1.x contract' {
+        $module = Get-Module slmgr-ps
+        $actual = @($module.ExportedFunctions.Keys | Sort-Object)
+        $expected = @($script:Contract.Functions.Keys | Sort-Object)
 
-        foreach ($entry in $requiredParameters.GetEnumerator())
+        Compare-Object $actual $expected | Should -BeNullOrEmpty
+    }
+
+    It 'preserves established public parameter names' {
+        foreach ($entry in $script:Contract.Functions.GetEnumerator())
         {
             $command = Get-Command $entry.Key -Module slmgr-ps -ErrorAction Stop
-            foreach ($parameterName in $entry.Value)
+            foreach ($parameterName in $entry.Value.Parameters)
             {
                 $command.Parameters.Keys | Should -Contain $parameterName
             }
         }
     }
 
-    It 'preserves KmsServer as an alias for Start-WindowsActivation KMSServerFQDN' {
-        $parameter = (Get-Command Start-WindowsActivation -Module slmgr-ps).Parameters['KMSServerFQDN']
-        @($parameter.Aliases) | Should -Contain 'KmsServer'
+    It 'preserves established parameter aliases' {
+        foreach ($entry in $script:Contract.Functions.GetEnumerator())
+        {
+            if (-not $entry.Value.ContainsKey('ParameterAliases')) { continue }
+
+            $command = Get-Command $entry.Key -Module slmgr-ps -ErrorAction Stop
+            foreach ($parameterEntry in $entry.Value.ParameterAliases.GetEnumerator())
+            {
+                $parameter = $command.Parameters[$parameterEntry.Key]
+                foreach ($alias in $parameterEntry.Value)
+                {
+                    @($parameter.Aliases) | Should -Contain $alias
+                }
+            }
+        }
     }
 
-    It 'does not export aliases or cmdlets from the script module' {
+    It 'preserves ShouldProcess on mutating commands' {
+        foreach ($entry in $script:Contract.Functions.GetEnumerator())
+        {
+            if (-not $entry.Value.ContainsKey('SupportsShouldProcess')) { continue }
+
+            $command = Get-Command $entry.Key -Module slmgr-ps -ErrorAction Stop
+            $metadata = [System.Management.Automation.CommandMetadata]::new($command)
+            $metadata.SupportsShouldProcess | Should -Be $entry.Value.SupportsShouldProcess
+        }
+    }
+
+    It 'preserves the exported alias and cmdlet surface' {
         $module = Get-Module slmgr-ps
-        $module.ExportedAliases.Count | Should -Be 0
-        $module.ExportedCmdlets.Count | Should -Be 0
+        $actualAliases = @($module.ExportedAliases.Keys | Sort-Object)
+        $expectedAliases = @($script:Contract.ExportedAliases | Sort-Object)
+        $actualCmdlets = @($module.ExportedCmdlets.Keys | Sort-Object)
+        $expectedCmdlets = @($script:Contract.ExportedCmdlets | Sort-Object)
+
+        Compare-Object $actualAliases $expectedAliases | Should -BeNullOrEmpty
+        Compare-Object $actualCmdlets $expectedCmdlets | Should -BeNullOrEmpty
     }
 }
