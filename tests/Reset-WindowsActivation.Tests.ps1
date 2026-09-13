@@ -2,6 +2,9 @@ BeforeAll {
     . $PSScriptRoot/../src/Private/LicenseStatusCode.ps1
     . $PSScriptRoot/../src/Private/Get-Session.ps1
     . $PSScriptRoot/../src/Private/Get-WindowsLicensingProduct.ps1
+    . $PSScriptRoot/../src/Private/New-LicensingOperationResult.ps1
+    . $PSScriptRoot/../src/Private/New-LicensingOperationError.ps1
+    . $PSScriptRoot/../src/Private/Complete-LicensingOperationBatch.ps1
 
     # Define a stub without the [CimInstance] type constraint so PSCustomObject
     # mocks can flow through the pipeline without a ParameterBindingException.
