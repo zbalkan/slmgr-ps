@@ -48,25 +48,13 @@ function Get-ExtendedLicenseInformation
         {
             $kmsHostCaching = if ($Service.KeyManagementServiceHostCaching) { 'Enabled' } else { 'Disabled' }
         }
-        if ($null -ne $Service.PSObject.Properties['Version'])
-        {
-            $serviceVersion = $Service.Version
-        }
-        if ($null -ne $Service.PSObject.Properties['ClientMachineID'])
-        {
-            $clientMachineId = $Service.ClientMachineID
-        }
-        if ($null -ne $Service.PSObject.Properties['RemainingWindowsReArmCount'])
-        {
-            $remainingWindowsRearmCount = $Service.RemainingWindowsReArmCount
-        }
-        if ($null -ne $Service.PSObject.Properties['IsKeyManagementServiceMachine'])
-        {
-            $isKmsHost = [bool]$Service.IsKeyManagementServiceMachine
-        }
+        if ($null -ne $Service.PSObject.Properties['Version']) { $serviceVersion = $Service.Version }
+        if ($null -ne $Service.PSObject.Properties['ClientMachineID']) { $clientMachineId = $Service.ClientMachineID }
+        if ($null -ne $Service.PSObject.Properties['RemainingWindowsReArmCount']) { $remainingWindowsRearmCount = $Service.RemainingWindowsReArmCount }
+        if ($null -ne $Service.PSObject.Properties['IsKeyManagementServiceMachine']) { $isKmsHost = [bool]$Service.IsKeyManagementServiceMachine }
     }
 
-    $result = [PSCustomObject]@{
+    [PSCustomObject]@{
         Name                                 = $Product.Name
         Description                          = $Product.Description
         ActivationId                         = $Product.ID
@@ -99,6 +87,10 @@ function Get-ExtendedLicenseInformation
         TokenActivationGrantNumber           = $Product.TokenActivationGrantNumber
         TokenActivationCertificateThumbprint = $Product.TokenActivationCertificateThumbprint
         TokenActivationAdditionalInfo        = $Product.TokenActivationAdditionalInfo
+        ADActivationObjectName               = $Product.ADActivationObjectName
+        ADActivationObjectDN                 = $Product.ADActivationObjectDN
+        ADActivationCsvlkPid                 = $Product.ADActivationCsvlkPid
+        ADActivationCsvlkSkuId               = $Product.ADActivationCsvlkSkuId
         ConfiguredKmsHost                    = $Product.KeyManagementServiceMachine
         ConfiguredKmsPort                    = $configuredKmsPort
         DiscoveredKmsHost                    = $Product.DiscoveredKeyManagementServiceMachineName
@@ -106,5 +98,4 @@ function Get-ExtendedLicenseInformation
         KmsLookupDomain                      = $Product.KeyManagementServiceLookupDomain
         KmsHostCaching                       = $kmsHostCaching
     }
-    return $result
 }
