@@ -19,7 +19,9 @@ function Complete-LicensingOperationBatch
         $targets.Add($failure.TargetObject)
     }
 
-    $message = "$($Failures.Count) licensing operation(s) failed. See the error target and exception data for per-target details."
+    $firstFailure = $Failures[0].Exception.InnerException
+    if ($null -eq $firstFailure) { $firstFailure = $Failures[0].Exception }
+    $message = "$($Failures.Count) licensing operation(s) failed. First failure: $($firstFailure.Message)"
     $exception = [System.AggregateException]::new($message, $innerExceptions.ToArray())
     $exception.Data['Failures'] = $Failures.ToArray()
 
