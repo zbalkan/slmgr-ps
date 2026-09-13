@@ -47,7 +47,6 @@ function Get-SppContract
             'KeyManagementServiceNotificationRequests',
             'KeyManagementServiceTotalRequests',
             'KeyManagementServiceFailedRequests',
-            'KeyManagementServiceActivationDisabled',
             'TokenActivationILID',
             'TokenActivationILVID',
             'TokenActivationGrantNumber',
