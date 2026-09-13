@@ -15,7 +15,9 @@ function Get-SppContract
             'KeyManagementServicePort',
             'DiscoveredKeyManagementServiceMachineName',
             'DiscoveredKeyManagementServiceMachinePort',
-            'KeyManagementServiceLookupDomain'
+            'KeyManagementServiceLookupDomain',
+            'VLActivationType',
+            'VLActivationTypeEnabled'
         )
         ServiceProperties = @(
             'KeyManagementServiceHostCaching'
@@ -39,6 +41,10 @@ function Get-SppContract
             }
             ClearProductKeyFromRegistry = @{
                 Classes   = @('SoftwareLicensingService')
+                Arguments = @()
+            }
+            ClearVLActivationTypeEnabled = @{
+                Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
                 Arguments = @()
             }
             DepositOfflineConfirmationId = @{
@@ -84,6 +90,10 @@ function Get-SppContract
             SetKeyManagementServicePort = @{
                 Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
                 Arguments = @('PortNumber')
+            }
+            SetVLActivationTypeEnabled = @{
+                Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
+                Arguments = @('ActivationType')
             }
             UninstallProductKey = @{
                 Classes   = @('SoftwareLicensingProduct')
