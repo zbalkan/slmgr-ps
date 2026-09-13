@@ -71,13 +71,13 @@ Describe 'Invoke-SppCimMethod' {
     }
 
     It 'routes application rearm to the licensing service' {
-        $applicationId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        $expectedApplicationId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         $script:Service | Invoke-SppCimMethod -MethodName ReArmApp `
-            -Arguments @{ ApplicationId = $applicationId }
+            -Arguments @{ ApplicationId = $expectedApplicationId }
 
         Should -Invoke Invoke-CimMethod -ParameterFilter {
             $MethodName -eq 'ReArmApp' -and
-            $Arguments.ApplicationId -eq $applicationId
+            $Arguments.ApplicationId -eq $expectedApplicationId
         } -Times 1
     }
 
