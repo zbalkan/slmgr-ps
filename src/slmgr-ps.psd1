@@ -12,7 +12,7 @@
     RootModule        = 'slmgr-ps.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.5.0'
+    ModuleVersion     = '1.6.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -115,7 +115,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'Standardized mutation results, batch error identity, provider HRESULT reporting, verification state, and extended activation diagnostics.'
+            ReleaseNotes = 'Added service-wide and activation-ID-scoped volume activation type policy controls with provider-contract validation and extended policy reporting.'
 
             # External dependent modules of this module
             # ExternalModuleDependencies = ''
