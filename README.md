@@ -4,56 +4,6 @@ A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
 `slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially licensing status, online and offline activation, license installation and repair, rearm, product-key removal, product-key registry cleanup, and KMS client workflows.
 
-## Changes in 1.5.0
-
-- Added a stable `slmgr-ps.LicensingOperationResult` contract for mutating commands.
-- Added explicit `Verified`, `ProviderAccepted`, `NotVerifiable`, and `Failed` verification states.
-- Standardized provider failures with hexadecimal SPP/CIM error codes when available and stable operation identifiers.
-- Replaced repeated per-target error emission followed by a duplicate first-error throw with one aggregate batch error containing structured failed-target results.
-- Expanded extended activation reporting with numeric and readable license status, status reason, evaluation end date, grace and rearm data, service version, client-machine ID, KMS-host state, and activation/renewal intervals.
-- Preserved unset provider dates as `$null` rather than artificial minimum dates.
-
-## Changes in 1.4.0
-
-- Added standalone KMS client endpoint, port, lookup-domain, and host-caching configuration.
-- Added service-wide and activation-ID-scoped KMS client settings where the SPP provider supports both scopes.
-- Added lookup-domain clearing without changing the existing host-and-port-only reset behavior.
-- Added hostname, FQDN, IPv4, bracketed IPv6, embedded-port, domain, and port validation before CIM sessions are opened.
-- Added configured and discovered KMS client state to extended activation output.
-- Corrected KMS host-caching calls to pass the provider's required `DisableCaching` argument.
-
-## Changes in 1.3.0
-
-- Added `.xrm-ms` license-file installation for local and remote computers.
-- Added local system-license repair from the Windows OEM and SPP token directories.
-- Added application-level and SKU-level rearm with exact GUID targeting.
-- Added file, identifier, provider-contract, and pre-session validation for the new operations.
-- Added per-file and per-computer failure containment with final terminating errors.
-- Added tests for routing, cleanup, `ShouldProcess`, partial failure, and public exports.
-
-## Changes in 1.2.0
-
-- Added explicit product-key installation followed by activation in one command.
-- Added activation-ID targeting for license queries, activation, offline activation, key removal, and KMS client settings.
-- Added `-All` enumeration for basic and extended license information.
-- Added product and application identifiers to license-information output.
-- Added batch failure containment for activation and reset operations.
-- Added deterministic post-install product selection and final activation-ID verification.
-- Added validation that rejects ambiguous product-key and activation-ID combinations.
-
-## Changes in 1.1.2
-
-- Fixed Publish script for master/main branch checks
-
-## Changes in 1.1.1
-
-- Corrected product-key registry clearing to use `SoftwareLicensingService`.
-- Corrected KMS reset to clear both the configured host and port while preserving the lookup domain.
-- Allowed non-elevated module import for read-only commands.
-- Preserved the caller's error-action preference when commands fail.
-- Added final-state verification for offline activation.
-- Added SPP class-contract, session, and failure-path tests.
-
 ## About this module
 
 One of my hardening guidelines is to remove VBScript execution from managed Windows environments where possible.
@@ -86,26 +36,6 @@ The module currently exports six public functions:
 - `Reset-WindowsActivation`
 
 The current implementation is intentionally narrower than `slmgr.vbs`. It supports default, activation-ID, and all-product client queries, targeted client activation and reset operations, KMS client configuration, license installation, local system-license repair, and targeted rearm. It does not currently support token-based activation, Active Directory-based activation, or KMS server configuration.
-
-## Operation results and errors
-
-Mutating commands emit a `slmgr-ps.LicensingOperationResult` for each computer on which an operation is attempted. The result contract is stable across activation, rearm, KMS client configuration, reset, license installation, and system-license repair.
-
-| Field | Meaning |
-| --- | --- |
-| `ComputerName` | Target computer associated with the operation. |
-| `Success` | Whether the requested operation completed according to its verification contract. |
-| `Operation` | Stable operation identifier suitable for automation. |
-| `ActivationId` | Exact affected licensing product identifier when applicable. |
-| `ProductName` | Resolved product name when applicable and available. |
-| `RestartRequired` | Whether a restart is required before the change is fully effective. |
-| `ErrorCode` | SPP or CIM error code formatted as `0xXXXXXXXX` when one is available. Generic PowerShell or .NET errors do not invent a licensing error code. |
-| `ErrorMessage` | Provider or exception message without intentionally echoing sensitive command input. |
-| `VerificationState` | `Verified`, `ProviderAccepted`, `NotVerifiable`, or `Failed`. |
-
-`Verified` means the module queried a reliable final state and confirmed the intended outcome. `ProviderAccepted` means the documented provider call succeeded but the final state cannot yet be established reliably, such as a rearm operation that requires restart. `NotVerifiable` is reserved for successful operations for which the provider exposes no reliable read-back path. `Failed` identifies a failed target.
-
-For multi-computer operations, the module continues with later targets when it is safe to do so. If any target fails, the command terminates after the batch with a `LicensingBatchFailed` error. Its `TargetObject` contains the failed `LicensingOperationResult` objects, and detailed per-target errors are retained in the exception data. The module does not write the same collected failure repeatedly before throwing the aggregate error.
 
 ## Installation
 
@@ -299,6 +229,26 @@ Reset-WindowsActivation -Computer WS01 -Credentials (Get-Credential) -UninstallP
 
 `-ClearKMSSettings` clears the configured KMS host name and port. It preserves a configured KMS lookup domain, matching `/ckms` behavior. Use `-ClearKMSLookupDomain` to clear the domain independently. With `-ActivationId`, either switch invokes the product-scoped KMS client methods.
 
+### Operation results and errors
+
+Mutating commands emit a `slmgr-ps.LicensingOperationResult` for each computer on which an operation is attempted. The result contract is stable across activation, rearm, KMS client configuration, reset, license installation, and system-license repair.
+
+| Field | Meaning |
+| --- | --- |
+| `ComputerName` | Target computer associated with the operation. |
+| `Success` | Whether the requested operation completed according to its verification contract. |
+| `Operation` | Stable operation identifier suitable for automation. |
+| `ActivationId` | Exact affected licensing product identifier when applicable. |
+| `ProductName` | Resolved product name when applicable and available. |
+| `RestartRequired` | Whether a restart is required before the change is fully effective. |
+| `ErrorCode` | SPP or CIM error code formatted as `0xXXXXXXXX` when one is available. Generic PowerShell or .NET errors do not invent a licensing error code. |
+| `ErrorMessage` | Provider or exception message without intentionally echoing sensitive command input. |
+| `VerificationState` | `Verified`, `ProviderAccepted`, `NotVerifiable`, or `Failed`. |
+
+`Verified` means the module queried a reliable final state and confirmed the intended outcome. `ProviderAccepted` means the documented provider call succeeded but the final state cannot yet be established reliably, such as a rearm operation that requires restart. `NotVerifiable` is reserved for successful operations for which the provider exposes no reliable read-back path. `Failed` identifies a failed target.
+
+For multi-computer operations, the module continues with later targets when it is safe to do so. If any target fails, the command terminates after the batch with a `LicensingBatchFailed` error. Its `TargetObject` contains the failed `LicensingOperationResult` objects, and detailed per-target errors are retained in the exception data. The module does not write the same collected failure repeatedly before throwing the aggregate error.
+
 ## Comparison with slmgr.vbs
 
 The following table compares the current `slmgr-ps` implementation with documented `slmgr.vbs` options.
@@ -320,50 +270,50 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 ### Global options
 
-| `slmgr.vbs` option     | `slmgr-ps` equivalent                      |          Status | Notes                                                                                                   |
-| ---------------------- | ------------------------------------------ | --------------: | ------------------------------------------------------------------------------------------------------- |
-| `/ipk <ProductKey>`    | `Start-WindowsActivation -ProductKey <ProductKey>` | Supported differently | Installs the supplied key and immediately attempts activation in the same operation.                |
-| `/ato`                 | `Start-WindowsActivation`                        | Supported | Activates the selected Windows licensing product.                                                  |
-| `/ato <Activation ID>` | `Start-WindowsActivation -ActivationId <ActivationId>` | Supported | Resolves and activates the exact SPP product.                                                   |
-| `/dli`                 | `Get-WindowsActivation`                    |       Supported | Returns basic information for the selected Windows licensing product.                                   |
-| `/dli <Activation ID>` | `Get-WindowsActivation -ActivationId <ActivationId>` | Supported | Returns basic information for the exact SPP product.                                           |
-| `/dli all`             | `Get-WindowsActivation -All`                        | Supported | Returns basic information for every SPP product.                                                |
-| `/dlv`                 | `Get-WindowsActivation -Extended`          |       Supported | Returns extended information for the selected Windows licensing product.                                |
-| `/dlv <Activation ID>` | `Get-WindowsActivation -Extended -ActivationId <ActivationId>` | Supported | Returns extended information for the exact SPP product.                              |
-| `/dlv all`             | `Get-WindowsActivation -Extended -All`                        | Supported | Returns extended information for every SPP product.                                   |
-| `/xpr`                 | `Get-WindowsActivation -Expiry`            |       Supported | Returns expiry status for the selected Windows licensing product.                                       |
-| `/xpr <Activation ID>` | `Get-WindowsActivation -Expiry -ActivationId <ActivationId>` | Supported | Returns expiry information for the exact SPP product.                                    |
+| `slmgr.vbs` option     | `slmgr-ps` equivalent                                          |                Status | Notes                                                                                                   |
+| ---------------------- | -------------------------------------------------------------- | --------------------: | ------------------------------------------------------------------------------------------------------- |
+| `/ipk <ProductKey>`    | `Start-WindowsActivation -ProductKey <ProductKey>`             | Supported differently | Installs the supplied key and immediately attempts activation in the same operation.                    |
+| `/ato`                 | `Start-WindowsActivation`                                      |             Supported | Activates the selected Windows licensing product.                                                       |
+| `/ato <Activation ID>` | `Start-WindowsActivation -ActivationId <ActivationId>`         |             Supported | Resolves and activates the exact SPP product.                                                           |
+| `/dli`                 | `Get-WindowsActivation`                                        |             Supported | Returns basic information for the selected Windows licensing product.                                   |
+| `/dli <Activation ID>` | `Get-WindowsActivation -ActivationId <ActivationId>`           |             Supported | Returns basic information for the exact SPP product.                                                    |
+| `/dli all`             | `Get-WindowsActivation -All`                                   |             Supported | Returns basic information for every SPP product.                                                        |
+| `/dlv`                 | `Get-WindowsActivation -Extended`                              |             Supported | Returns extended information for the selected Windows licensing product.                                |
+| `/dlv <Activation ID>` | `Get-WindowsActivation -Extended -ActivationId <ActivationId>` |             Supported | Returns extended information for the exact SPP product.                                                 |
+| `/dlv all`             | `Get-WindowsActivation -Extended -All`                         |             Supported | Returns extended information for every SPP product.                                                     |
+| `/xpr`                 | `Get-WindowsActivation -Expiry`                                |             Supported | Returns expiry status for the selected Windows licensing product.                                       |
+| `/xpr <Activation ID>` | `Get-WindowsActivation -Expiry -ActivationId <ActivationId>`   |             Supported | Returns expiry information for the exact SPP product.                                                   |
 
 ### Advanced options
 
-| `slmgr.vbs` option                       | `slmgr-ps` equivalent                                                |          Status | Notes                                                                                 |
-| ---------------------------------------- | -------------------------------------------------------------------- | --------------: | ------------------------------------------------------------------------------------- |
-| `/cpky`                                  | `Reset-WindowsActivation -ClearProductKeyFromRegistry`               |       Supported | Clears the product key from registry storage through `SoftwareLicensingService`.      |
-| `/ilc <license_file>`                    | `Install-WindowsLicense -Path <license_file>`                         | Supported differently | Reads the controller-side `.xrm-ms` file and installs its content through CIM.         |
-| `/rilc`                                  | `Repair-WindowsLicense`                                               | Supported locally | Reinstalls `.xrm-ms` files from the local Windows OEM and SPP token directories.       |
-| `/rearm`                                 | `Start-WindowsActivation -Rearm`                                     |       Supported | Resets activation state where supported by Windows.                                   |
-| `/rearm-app <Application ID>`            | `Start-WindowsActivation -Rearm -ApplicationId <ApplicationId>`       |       Supported | Rearms the exact application through `SoftwareLicensingService`.                       |
-| `/rearm-sku <Activation ID>`             | `Start-WindowsActivation -Rearm -ActivationId <ActivationId>`         |       Supported | Resolves and rearms the exact licensing product.                                       |
-| `/upk`                                   | `Reset-WindowsActivation -UninstallProductKey`                       |       Supported | Uninstalls the product key from the selected Windows licensing product.               |
-| `/upk <Activation ID>`                   | `Reset-WindowsActivation -UninstallProductKey -ActivationId <ActivationId>` | Supported | Uninstalls the key from the exact SPP product.                          |
-| `/dti`                                   | `Get-WindowsActivation -Offline`                                     |       Supported | Returns the offline installation ID for the selected Windows licensing product.       |
-| `/dti <Activation ID>`                   | `Get-WindowsActivation -Offline -ActivationId <ActivationId>`        | Supported | Returns the offline installation ID for the exact SPP product.                        |
-| `/atp <Confirmation ID>`                 | `Start-WindowsActivation -Offline -ConfirmationId <Confirmation ID>` |       Supported | Applies a confirmation ID to the selected Windows licensing product.                  |
-| `/atp <Confirmation ID> <Activation ID>` | `Start-WindowsActivation -Offline -ConfirmationId <ConfirmationId> -ActivationId <ActivationId>` | Supported | Applies the confirmation ID to the exact SPP product. |
+| `slmgr.vbs` option                       | `slmgr-ps` equivalent                                                                            |                Status | Notes                                                                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------: | ------------------------------------------------------------------------------------- |
+| `/cpky`                                  | `Reset-WindowsActivation -ClearProductKeyFromRegistry`                                           |             Supported | Clears the product key from registry storage through `SoftwareLicensingService`.      |
+| `/ilc <license_file>`                    | `Install-WindowsLicense -Path <license_file>`                                                    | Supported differently | Reads the controller-side `.xrm-ms` file and installs its content through CIM.        |
+| `/rilc`                                  | `Repair-WindowsLicense`                                                                          |     Supported locally | Reinstalls `.xrm-ms` files from the local Windows OEM and SPP token directories.      |
+| `/rearm`                                 | `Start-WindowsActivation -Rearm`                                                                 |             Supported | Resets activation state where supported by Windows.                                   |
+| `/rearm-app <Application ID>`            | `Start-WindowsActivation -Rearm -ApplicationId <ApplicationId>`                                  |             Supported | Rearms the exact application through `SoftwareLicensingService`.                      |
+| `/rearm-sku <Activation ID>`             | `Start-WindowsActivation -Rearm -ActivationId <ActivationId>`                                    |             Supported | Resolves and rearms the exact licensing product.                                      |
+| `/upk`                                   | `Reset-WindowsActivation -UninstallProductKey`                                                   |             Supported | Uninstalls the product key from the selected Windows licensing product.               |
+| `/upk <Activation ID>`                   | `Reset-WindowsActivation -UninstallProductKey -ActivationId <ActivationId>`                      |             Supported | Uninstalls the key from the exact SPP product.                                        |
+| `/dti`                                   | `Get-WindowsActivation -Offline`                                                                 |             Supported | Returns the offline installation ID for the selected Windows licensing product.       |
+| `/dti <Activation ID>`                   | `Get-WindowsActivation -Offline -ActivationId <ActivationId>`                                    |             Supported | Returns the offline installation ID for the exact SPP product.                        |
+| `/atp <Confirmation ID>`                 | `Start-WindowsActivation -Offline -ConfirmationId <Confirmation ID>`                             |             Supported | Applies a confirmation ID to the selected Windows licensing product.                  |
+| `/atp <Confirmation ID> <Activation ID>` | `Start-WindowsActivation -Offline -ConfirmationId <ConfirmationId> -ActivationId <ActivationId>` |             Supported | Applies the confirmation ID to the exact SPP product.                                 |
 
 ### KMS client options
 
-| `slmgr.vbs` option                    | `slmgr-ps` equivalent                                                 |          Status | Notes                                                                                                                     |
-| ------------------------------------- | --------------------------------------------------------------------- | --------------: | ------------------------------------------------------------------------------------------------------------------------- |
-| `/skms <Name[:Port]>`                 | `Set-WindowsKmsClient -KmsServer <Name[:Port]>`                        | Supported | Accepts hostnames, FQDNs, IPv4, and bracketed IPv6. Use `-Port` alone for the `:Port` form.                                |
-| `/skms <Name[:Port]> <Activation ID>` | Add `-ActivationId <ActivationId>` to the command above                | Supported | Applies the endpoint to the exact licensing product. `Start-WindowsActivation` can configure and activate in one call.    |
-| `/skms-domain <FQDN>`                 | `Set-WindowsKmsClient -LookupDomain <FQDN>`                            | Supported | Configures the service-wide KMS DNS lookup domain.                                                                         |
-| `/skms-domain <FQDN> <Activation ID>` | Add `-ActivationId <ActivationId>` to the command above                | Supported | Configures the lookup domain on the exact licensing product.                                                               |
-| `/ckms`                               | `Reset-WindowsActivation -ClearKMSSettings`                           |       Supported | Clears the configured KMS host name and port while preserving the KMS lookup domain.                                      |
-| `/ckms <Activation ID>`               | `Reset-WindowsActivation -ClearKMSSettings -ActivationId <ActivationId>` | Supported | Clears product-specific KMS client host and port settings.                         |
-| `/ckms-domain`                        | `Reset-WindowsActivation -ClearKMSLookupDomain`                       | Supported | Clears the lookup domain without clearing the configured host and port.                                                   |
-| `/skhc`                               | `Set-WindowsKmsClient -HostCaching Enabled`                           | Supported | Enables service-wide KMS host caching.                                                                                     |
-| `/ckhc`                               | `Set-WindowsKmsClient -HostCaching Disabled`                          | Supported | Disables service-wide KMS host caching. `Start-WindowsActivation -CacheDisabled` remains available for combined use.       |
+| `slmgr.vbs` option                    | `slmgr-ps` equivalent                                                    |          Status | Notes                                                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------ | --------------: | ------------------------------------------------------------------------------------------------------------------------- |
+| `/skms <Name[:Port]>`                 | `Set-WindowsKmsClient -KmsServer <Name[:Port]>`                          |       Supported | Accepts hostnames, FQDNs, IPv4, and bracketed IPv6. Use `-Port` alone for the `:Port` form.                               |
+| `/skms <Name[:Port]> <Activation ID>` | Add `-ActivationId <ActivationId>` to the command above                  |       Supported | Applies the endpoint to the exact licensing product. `Start-WindowsActivation` can configure and activate in one call.    |
+| `/skms-domain <FQDN>`                 | `Set-WindowsKmsClient -LookupDomain <FQDN>`                              |       Supported | Configures the service-wide KMS DNS lookup domain.                                                                        |
+| `/skms-domain <FQDN> <Activation ID>` | Add `-ActivationId <ActivationId>` to the command above                  |       Supported | Configures the lookup domain on the exact licensing product.                                                              |
+| `/ckms`                               | `Reset-WindowsActivation -ClearKMSSettings`                              |       Supported | Clears the configured KMS host name and port while preserving the KMS lookup domain.                                      |
+| `/ckms <Activation ID>`               | `Reset-WindowsActivation -ClearKMSSettings -ActivationId <ActivationId>` |       Supported | Clears product-specific KMS client host and port settings.                                                                |
+| `/ckms-domain`                        | `Reset-WindowsActivation -ClearKMSLookupDomain`                          |       Supported | Clears the lookup domain without clearing the configured host and port.                                                   |
+| `/skhc`                               | `Set-WindowsKmsClient -HostCaching Enabled`                              |       Supported | Enables service-wide KMS host caching.                                                                                    |
+| `/ckhc`                               | `Set-WindowsKmsClient -HostCaching Disabled`                             |       Supported | Disables service-wide KMS host caching. `Start-WindowsActivation -CacheDisabled` remains available for combined use.      |
 
 ### KMS server configuration options
 
