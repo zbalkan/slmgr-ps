@@ -66,6 +66,7 @@ jobs:
             'Get-WindowsActivation'
             'Get-WindowsADActivationInstallationId'
             'Get-WindowsADActivationObject'
+            'Get-WindowsKmsHost'
             'Get-WindowsTokenActivationLicense'
             'Install-WindowsLicense'
             'New-WindowsADActivationObject'
@@ -75,6 +76,7 @@ jobs:
             'Reset-WindowsActivation'
             'Set-WindowsActivationType'
             'Set-WindowsKmsClient'
+            'Set-WindowsKmsHost'
             'Start-WindowsActivation'
           ) | Sort-Object
           if (Compare-Object $exported $expected)
