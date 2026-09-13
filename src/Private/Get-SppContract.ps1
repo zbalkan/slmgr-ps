@@ -41,6 +41,18 @@ function Get-SppContract
                 Classes   = @('SoftwareLicensingService')
                 Arguments = @('ProductKey')
             }
+            InstallLicense = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('License')
+            }
+            ReArmApp = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('ApplicationId')
+            }
+            ReArmSku = @{
+                Classes   = @('SoftwareLicensingProduct')
+                Arguments = @()
+            }
             ReArmWindows = @{
                 Classes   = @('SoftwareLicensingService')
                 Arguments = @()
