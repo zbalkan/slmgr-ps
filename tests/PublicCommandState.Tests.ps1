@@ -9,6 +9,7 @@ Describe 'Public command state' {
             'Get-WindowsActivation'
             'Get-WindowsADActivationInstallationId'
             'Get-WindowsADActivationObject'
+            'Get-WindowsKmsHost'
             'Get-WindowsTokenActivationLicense'
             'Install-WindowsLicense'
             'New-WindowsADActivationObject'
@@ -18,6 +19,7 @@ Describe 'Public command state' {
             'Reset-WindowsActivation'
             'Set-WindowsActivationType'
             'Set-WindowsKmsClient'
+            'Set-WindowsKmsHost'
             'Start-WindowsActivation'
         )
         $actualCommands = @(Get-Command -Module slmgr-ps).Name
