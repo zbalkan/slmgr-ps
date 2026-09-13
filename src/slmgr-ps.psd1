@@ -12,7 +12,7 @@
     RootModule        = 'slmgr-ps.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.9.1'
+    ModuleVersion     = '1.9.2'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -123,7 +123,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'Stabilized the 1.x public command contract and documented the tested support matrix, OSLicense relationship, and deferred 2.0 contract cleanup.'
+            ReleaseNotes = 'Centralized the stable 1.x public contract and added an opt-in integration matrix for real Windows, WinRM, KMS, token, and Active Directory validation.'
 
             # External dependent modules of this module
             # ExternalModuleDependencies = ''

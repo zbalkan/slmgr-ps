@@ -24,34 +24,6 @@ This repository turns that script into a PowerShell module so it can be installe
 
 Microsoft now provides the official [OSLicense PowerShell module](https://learn.microsoft.com/en-gb/powershell/module/oslicense/?view=windowsserver2025-ps). `slmgr-ps` remains an independent community alternative: it uses documented Windows Software Protection Platform CIM interfaces and public Windows interfaces directly and does not import, call, wrap, or depend on OSLicense components.
 
-## Current scope
-
-The module currently exports fifteen public functions:
-
-- `Get-WindowsActivation`
-- `Get-WindowsADActivationInstallationId`
-- `Get-WindowsADActivationObject`
-- `Get-WindowsKmsHost`
-- `Get-WindowsTokenActivationLicense`
-- `Install-WindowsLicense`
-- `New-WindowsADActivationObject`
-- `Remove-WindowsADActivationObject`
-- `Remove-WindowsTokenActivationLicense`
-- `Repair-WindowsLicense`
-- `Reset-WindowsActivation`
-- `Set-WindowsActivationType`
-- `Set-WindowsKmsClient`
-- `Set-WindowsKmsHost`
-- `Start-WindowsActivation`
-
-The implementation supports default, activation-ID, and all-product client queries; targeted client activation and reset operations; KMS client and host configuration; activation-type policy; license installation; local system-license repair; targeted rearm; token issuance-license listing and removal; and documented Active Directory activation-object workflows. Token certificate/PIN activation remains outside the supported surface.
-
-## 1.9.x stability policy
-
-The 1.9.x line is a stabilization line. Version 1.9.1 does not perform the breaking public-contract cleanup that had previously been planned for 2.0.0. Existing 1.x command names and established parameter names are pinned by regression tests so compatibility fixes and documentation work can continue without silently changing automation contracts.
-
-A future 2.0.0 remains reserved for a deliberate, manually reviewed contract pass. That work may include removing obsolete aliases, resolving ambiguous parameter sets, normalizing output and error contracts, and standardizing parameter naming. Those changes are intentionally deferred rather than being introduced under a patch version.
-
 ## Installation
 
 ```powershell
@@ -60,21 +32,41 @@ Install-Module slmgr-ps
 
 ## Validation and support matrix
 
-The table below distinguishes automated verification from capabilities that still require environment-specific integration testing. Passing CI does not by itself establish support for every Windows release or every licensing topology.
+The table below distinguishes automated verification from capabilities that still require environment-specific integration testing. Passing CI does not by itself establish support for every Windows release or every licensing topology. The stable 1.x interface inventory is defined once in `tests/PublicContract.psd1` and consumed by both Pester and CI.
 
 | Area | Current validation |
 | --- | --- |
 | Windows PowerShell 5.1 | Pester runs in CI on `windows-latest`. |
 | PowerShell 7 | Pester runs in CI using the current PowerShell 7 available on `windows-latest`. Older PowerShell 7 baselines are not separately matrix-tested. |
-| Module manifest and exports | Validated in CI, including the fifteen exported public commands. |
-| Public 1.x parameter names | Pinned by `PublicContractStability.Tests.ps1` to detect accidental breaking drift. |
+| Module manifest and exports | Validated in CI against `tests/PublicContract.psd1`. |
+| Public 1.x parameters and aliases | Pinned by `PublicContractStability.Tests.ps1` to detect accidental breaking drift. |
+| `ShouldProcess` mutation contract | Pinned for mutating public commands by the declarative public contract. |
 | SPP provider contracts | Live CIM class, property, method, and argument checks run where the GitHub Windows runner exposes the relevant provider surface. Optional provider fields are not treated as universally available. |
-| Local CIM/DCOM workflows | Covered by unit/provider tests, but not claimed as exhaustively validated across every Windows client and Server generation. |
-| Remote WinRM and explicit credentials | Implemented and unit-tested; real multi-host validation remains environment-specific. |
+| Local CIM/DCOM workflows | Available in the opt-in integration matrix and covered by unit/provider tests. |
+| Remote WinRM and explicit credentials | Available in the opt-in integration matrix when a remote target is supplied. |
 | KMS client operations | Covered by unit and provider-contract tests. |
-| KMS host operations | Covered by unit and provider-contract tests; destructive mutation still requires an isolated real KMS-host lab for integration validation. |
+| KMS host operations | Read-only host validation is available in the integration matrix. Real mutation requires an isolated host and explicit mutation opt-in. |
 | Token issuance licenses | Listing and exact ILID/ILVID removal are covered by provider-contract and unit tests. Certificate/PIN activation remains unsupported. |
-| Active Directory activation | Provider and dependency paths are tested; forest publication, privilege failures, duplicate handling, and deletion require an AD integration environment. |
+| Active Directory activation | Read-only activation-object enumeration is available in the integration matrix. Publication, privilege-failure, duplicate, and deletion paths still require a dedicated AD lab. |
+
+Standard CI explicitly excludes tests tagged `Integration`. Run the read-only integration matrix on an appropriate Windows system with:
+
+```powershell
+./tests/Integration/Invoke-IntegrationMatrix.ps1
+```
+
+Remote WinRM, explicit credentials, KMS-host reads, and Active Directory reads can be enabled by supplying their targets:
+
+```powershell
+./tests/Integration/Invoke-IntegrationMatrix.ps1 `
+    -RemoteComputer WS01 `
+    -Credential (Get-Credential) `
+    -KmsHost KMS01 `
+    -DirectoryServer dc01.example.test `
+    -DirectoryCredential (Get-Credential)
+```
+
+Destructive integration tests remain excluded unless `-AllowMutation` is supplied. The current destructive probe writes a KMS host's existing activation interval back to the same value and verifies the provider read-back result. It still invokes a real mutating method and should only be run in an isolated validation environment.
 
 No Windows version outside an actually exercised environment should be inferred to be fully validated merely because its SPP provider exposes similarly named CIM members.
 
@@ -507,13 +499,13 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 Microsoft's `OSLicense` module is the official Microsoft PowerShell surface for supported Windows licensing administration. `slmgr-ps` is not an adapter for it and does not use it as a runtime dependency or fallback.
 
-| Concern | `slmgr-ps` | `OSLicense` |
-| --- | --- | --- |
-| Ownership and support | Independent community project | Microsoft-provided module |
-| Implementation relationship | Uses documented SPP CIM and other public Windows interfaces directly | Microsoft implementation |
-| Runtime dependency between the two | None | None required by `slmgr-ps` |
-| `slmgr.vbs` parity documentation | Explicitly maintained in this README | Not used as the compatibility contract for this project |
-| Project contract | PowerShell-native 1.x commands documented here | Defined by Microsoft's module documentation for the installed Windows generation |
+| Concern                            | `slmgr-ps`                                                           | `OSLicense`                                                                      |
+| ---------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Ownership and support              | Independent community project                                        | Microsoft-provided module                                                        |
+| Implementation relationship        | Uses documented SPP CIM and other public Windows interfaces directly | Microsoft implementation                                                         |
+| Runtime dependency between the two | None                                                                 | None required by `slmgr-ps`                                                      |
+| `slmgr.vbs` parity documentation   | Explicitly maintained in this README                                 | Not used as the compatibility contract for this project                          |
+| Project contract                   | PowerShell-native 1.x commands documented here                       | Defined by Microsoft's module documentation for the installed Windows generation |
 
 This table is intentionally architectural rather than a cmdlet-by-cmdlet equivalence claim. `OSLicense` can evolve with Windows, and its presence or absence does not change how `slmgr-ps` executes. New deployments that require Microsoft support should prefer Microsoft's supported tooling; `slmgr-ps` remains useful where its independent command surface, remote batching, or Windows Script Host-free operation is specifically required.
 

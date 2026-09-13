@@ -59,29 +59,14 @@ jobs:
       - name: Import module and verify exports
         shell: pwsh
         run: |
+          $contract = Import-PowerShellDataFile ./tests/PublicContract.psd1
           Import-Module ./src/slmgr-ps.psd1 -Force
           $module = Get-Module slmgr-ps
-          $exported = $module.ExportedFunctions.Keys | Sort-Object
-          $expected = @(
-            'Get-WindowsActivation'
-            'Get-WindowsADActivationInstallationId'
-            'Get-WindowsADActivationObject'
-            'Get-WindowsKmsHost'
-            'Get-WindowsTokenActivationLicense'
-            'Install-WindowsLicense'
-            'New-WindowsADActivationObject'
-            'Remove-WindowsADActivationObject'
-            'Remove-WindowsTokenActivationLicense'
-            'Repair-WindowsLicense'
-            'Reset-WindowsActivation'
-            'Set-WindowsActivationType'
-            'Set-WindowsKmsClient'
-            'Set-WindowsKmsHost'
-            'Start-WindowsActivation'
-          ) | Sort-Object
+          $exported = @($module.ExportedFunctions.Keys | Sort-Object)
+          $expected = @($contract.Functions.Keys | Sort-Object)
           if (Compare-Object $exported $expected)
           {
-              Write-Error "Exported functions do not match expected: got [$($exported -join ', ')], expected [$($expected -join ', ')]"
+              Write-Error "Exported functions do not match the 1.x public contract: got [$($exported -join ', ')], expected [$($expected -join ', ')]"
               exit 1
           }
 
@@ -102,6 +87,7 @@ jobs:
         run: |
           $config = New-PesterConfiguration
           $config.Run.Path = './tests'
+          $config.Filter.ExcludeTag = 'Integration'
           $config.Output.Verbosity = 'Detailed'
           $config.TestResult.Enabled = $true
           $config.TestResult.OutputPath = './test-results-ps51.xml'
@@ -131,6 +117,7 @@ jobs:
         run: |
           $config = New-PesterConfiguration
           $config.Run.Path = './tests'
+          $config.Filter.ExcludeTag = 'Integration'
           $config.Output.Verbosity = 'Detailed'
           $config.TestResult.Enabled = $true
           $config.TestResult.OutputPath = './test-results-ps7.xml'

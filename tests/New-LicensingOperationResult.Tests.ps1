@@ -1,4 +1,5 @@
 BeforeAll {
+    $script:Contract = Import-PowerShellDataFile $PSScriptRoot/PublicContract.psd1
     . $PSScriptRoot/../src/Private/New-LicensingOperationResult.ps1
 }
 
@@ -13,18 +14,9 @@ Describe 'New-LicensingOperationResult' {
             -ProductName 'Windows' `
             -VerificationState Verified
 
-        $result.PSObject.TypeNames[0] | Should -Be 'slmgr-ps.LicensingOperationResult'
-        $result.PSObject.Properties.Name | Should -Be @(
-            'ComputerName'
-            'Success'
-            'Operation'
-            'ActivationId'
-            'ProductName'
-            'RestartRequired'
-            'ErrorCode'
-            'ErrorMessage'
-            'VerificationState'
-        )
+        $resultContract = $script:Contract.ResultContracts.LicensingOperationResult
+        $result.PSObject.TypeNames[0] | Should -Be $resultContract.TypeName
+        $result.PSObject.Properties.Name | Should -Be $resultContract.Properties
         $result.ComputerName | Should -Be 'WS01'
         $result.Success | Should -BeTrue
         $result.Operation | Should -Be 'Activate'
@@ -52,6 +44,15 @@ Describe 'New-LicensingOperationResult' {
         $result.ErrorCode | Should -Be '0xC004F050'
         $result.ErrorMessage | Should -Be 'Provider rejected the operation.'
         $result.VerificationState | Should -Be 'Failed'
+    }
+
+    It 'accepts every verification state declared by the public contract' {
+        foreach ($verificationState in $script:Contract.ResultContracts.LicensingOperationResult.VerificationStates)
+        {
+            $success = $verificationState -ne 'Failed'
+            { New-LicensingOperationResult -ComputerName localhost -Operation Test `
+                    -Success $success -VerificationState $verificationState } | Should -Not -Throw
+        }
     }
 
     It 'rejects unknown verification states' {
