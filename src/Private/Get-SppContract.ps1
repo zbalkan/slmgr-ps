@@ -22,7 +22,11 @@ function Get-SppContract
             'TokenActivationILVID',
             'TokenActivationGrantNumber',
             'TokenActivationCertificateThumbprint',
-            'TokenActivationAdditionalInfo'
+            'TokenActivationAdditionalInfo',
+            'ADActivationObjectName',
+            'ADActivationObjectDN',
+            'ADActivationCsvlkPid',
+            'ADActivationCsvlkSkuId'
         )
         ServiceProperties = @(
             'KeyManagementServiceHostCaching',
@@ -66,6 +70,10 @@ function Get-SppContract
                 Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
                 Arguments = @()
             }
+            DepositActiveDirectoryOfflineActivationConfirmation = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('ProductKey', 'ConfirmationID', 'ActivationObjectName')
+            }
             DepositOfflineConfirmationId = @{
                 Classes   = @('SoftwareLicensingProduct')
                 Arguments = @('InstallationId', 'ConfirmationId')
@@ -73,6 +81,14 @@ function Get-SppContract
             DisableKeyManagementServiceHostCaching = @{
                 Classes   = @('SoftwareLicensingService')
                 Arguments = @('DisableCaching')
+            }
+            DoActiveDirectoryOnlineActivation = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('ProductKey', 'ActivationObjectName')
+            }
+            GenerateActiveDirectoryOfflineActivationId = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('ProductKey')
             }
             InstallProductKey = @{
                 Classes   = @('SoftwareLicensingService')
