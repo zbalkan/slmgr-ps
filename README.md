@@ -2,7 +2,7 @@
 
 A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
-`slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially licensing status, online and offline activation, license installation and repair, rearm, product-key removal, product-key registry cleanup, and KMS client workflows.
+`slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows licensing and activation operations, including licensing status, online and offline activation, license installation and repair, rearm, product-key removal, KMS client configuration, activation-type policy, token issuance-license management, and documented Active Directory-based activation workflows.
 
 ## About this module
 
@@ -22,20 +22,27 @@ The original version was a small PowerShell script based on `slmgr.vbs`. You can
 
 This repository turns that script into a PowerShell module so it can be installed and used more easily. You can find it in the [PowerShell Gallery](https://www.powershellgallery.com/packages/slmgr-ps).
 
-Microsoft now provides the official [OSLicense PowerShell module](https://learn.microsoft.com/en-gb/powershell/module/oslicense/?view=windowsserver2025-ps). `slmgr-ps` remains an independent community alternative: it uses the Windows Software Protection Platform CIM interfaces directly and does not import, call, wrap, or depend on OSLicense components.
+Microsoft now provides the official [OSLicense PowerShell module](https://learn.microsoft.com/en-gb/powershell/module/oslicense/?view=windowsserver2025-ps). `slmgr-ps` remains an independent community alternative: it uses documented Windows Software Protection Platform CIM interfaces and public Windows interfaces directly and does not import, call, wrap, or depend on OSLicense components.
 
 ## Current scope
 
-The module currently exports six public functions:
+The module currently exports thirteen public functions:
 
 - `Get-WindowsActivation`
+- `Get-WindowsADActivationInstallationId`
+- `Get-WindowsADActivationObject`
+- `Get-WindowsTokenActivationLicense`
 - `Install-WindowsLicense`
+- `New-WindowsADActivationObject`
+- `Remove-WindowsADActivationObject`
+- `Remove-WindowsTokenActivationLicense`
 - `Repair-WindowsLicense`
+- `Reset-WindowsActivation`
+- `Set-WindowsActivationType`
 - `Set-WindowsKmsClient`
 - `Start-WindowsActivation`
-- `Reset-WindowsActivation`
 
-The current implementation is intentionally narrower than `slmgr.vbs`. It supports default, activation-ID, and all-product client queries, targeted client activation and reset operations, KMS client configuration, license installation, local system-license repair, and targeted rearm. It does not currently support token-based activation, Active Directory-based activation, or KMS server configuration.
+The implementation supports default, activation-ID, and all-product client queries; targeted client activation and reset operations; KMS client configuration; activation-type policy; license installation; local system-license repair; targeted rearm; token issuance-license listing and removal; and documented Active Directory activation-object workflows. KMS host configuration and token certificate/PIN activation remain outside the supported surface.
 
 ## Installation
 
@@ -68,7 +75,7 @@ Get-WindowsActivation -All
 Get-WindowsActivation -Extended -All
 ```
 
-Extended output includes the raw numeric and readable license status, status reason, grace period, evaluation end date, Windows/application/SKU rearm counts, trusted time, SPP service version, client-machine ID, KMS-host status, volume activation and renewal intervals, configured and discovered KMS host and port values, the KMS lookup domain, and service-wide host-caching state when the provider exposes them. Unset provider dates are returned as `$null`.
+Extended output includes the raw numeric and readable license status, status reason, grace period, evaluation end date, Windows/application/SKU rearm counts, trusted time, SPP service version, client-machine ID, KMS-host status, volume activation and renewal intervals, configured activation-type policy, last volume activation type, token activation state, Active Directory activation-object metadata, configured and discovered KMS host and port values, the KMS lookup domain, and service-wide host-caching state when the provider exposes them. Unset provider dates are returned as `$null`.
 
 ### Work with remote computers
 
@@ -83,7 +90,7 @@ Get-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
 Get-WindowsActivation -Computer WS01, WS02, WS03
 ```
 
-Remote operations use PowerShell CIM sessions. Local sessions use DCOM; remote sessions use WinRM. Ensure WinRM is enabled and reachable for remote computers.
+Remote CIM operations use PowerShell CIM sessions. Local sessions use DCOM; remote sessions use WinRM. Ensure WinRM is enabled and reachable for remote computers. Active Directory activation-object commands use the ActiveDirectory PowerShell module and directory connectivity instead of the CIM remote-execution path.
 
 ### Activate Windows
 
@@ -148,6 +155,24 @@ Set-WindowsKmsClient -KmsServer kms01 -Port 2500 `
 
 `Start-WindowsActivation -KmsServer ...` preserves the combined configuration-and-activation workflow. `-KMSServerFQDN` remains an accepted parameter name for compatibility.
 
+### Configure volume activation policy
+
+```powershell
+# Allow any supported volume activation mechanism
+Set-WindowsActivationType -ActivationType Any
+
+# Restrict activation to Active Directory, KMS, or token activation
+Set-WindowsActivationType -ActivationType ActiveDirectory
+Set-WindowsActivationType -ActivationType Kms
+Set-WindowsActivationType -ActivationType Token
+
+# Apply the policy to an exact licensing product
+Set-WindowsActivationType -ActivationType Kms `
+    -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+```
+
+`Any` clears the configured activation-type restriction. The restricted values map to the documented Software Protection Platform activation-type values. Policy changes return the common structured mutation result and report `ProviderAccepted` because the provider call does not itself return an authoritative post-state object.
+
 ### Offline activation
 
 ```powershell
@@ -162,6 +187,56 @@ Start-WindowsActivation -Offline -ConfirmationId 123456-123456-123456-123456-123
 ```
 
 The confirmation ID may contain dashes or spaces. The module normalizes it before submitting it.
+
+### Token activation issuance licenses
+
+```powershell
+# List installed token activation issuance licenses
+Get-WindowsTokenActivationLicense
+
+# Query a remote computer
+Get-WindowsTokenActivationLicense -Computer WS01 -Credentials (Get-Credential)
+
+# Remove one exact issuance license
+Remove-WindowsTokenActivationLicense `
+    -ILID 11111111-2222-3333-4444-555555555555 `
+    -ILVID 7
+```
+
+Issuance-license removal requires the exact ILID and ILVID pair. The module calls the documented `SoftwareLicensingTokenActivationLicense.Uninstall()` method and verifies that the exact license is no longer returned by the provider. Token certificate enumeration and certificate/PIN-driven activation are not implemented because the required end-to-end workflow is not sufficiently documented through public interfaces.
+
+### Active Directory-based activation
+
+Active Directory activation-object workflows require the ActiveDirectory PowerShell module and access to the target forest. Product keys and confirmation IDs are sensitive input and are not included in normal result objects.
+
+```powershell
+# Generate the installation ID for an offline AD activation workflow
+Get-WindowsADActivationInstallationId -ProductKey XXXXX-XXXXX-XXXXX-XXXXX-XXXXX
+
+# Create and publish an activation object online
+New-WindowsADActivationObject `
+    -ProductKey XXXXX-XXXXX-XXXXX-XXXXX-XXXXX `
+    -ActivationObjectName 'Windows Activation'
+
+# Complete the offline workflow after receiving a confirmation ID
+New-WindowsADActivationObject `
+    -ProductKey XXXXX-XXXXX-XXXXX-XXXXX-XXXXX `
+    -ConfirmationId 123456-123456-123456-123456-123456-123456-123456-123456-123456 `
+    -ActivationObjectName 'Windows Activation'
+
+# List activation objects or resolve one object
+Get-WindowsADActivationObject
+Get-WindowsADActivationObject -Name 'Windows Activation'
+Get-WindowsADActivationObject -DistinguishedName 'CN=example,CN=Activation Objects,CN=Microsoft SPP,CN=Services,CN=Configuration,DC=example,DC=test'
+
+# Remove an exact activation object
+Remove-WindowsADActivationObject `
+    -DistinguishedName 'CN=example,CN=Activation Objects,CN=Microsoft SPP,CN=Services,CN=Configuration,DC=example,DC=test'
+```
+
+`New-WindowsADActivationObject` requires an explicit activation-object name so the module can reject duplicates before mutation and verify the exact object afterward. Directory context is resolved through the ActiveDirectory module; the activation-object container is queried from the directory instead of constructing an LDAP distinguished name by concatenation. Deletion accepts only an exact distinguished name, uses high-impact confirmation, and verifies that the object disappeared.
+
+Use `-DirectoryServer` and `-DirectoryCredential` when explicit directory targeting is required.
 
 ### Rearm
 
@@ -231,7 +306,7 @@ Reset-WindowsActivation -Computer WS01 -Credentials (Get-Credential) -UninstallP
 
 ### Operation results and errors
 
-Mutating commands emit a `slmgr-ps.LicensingOperationResult` for each computer on which an operation is attempted. The result contract is stable across activation, rearm, KMS client configuration, reset, license installation, and system-license repair.
+Mutating commands emit a `slmgr-ps.LicensingOperationResult` when they use the common licensing mutation contract. The contract is used across activation, rearm, KMS client configuration, activation-type policy, reset, license installation, system-license repair, token issuance-license removal, and Active Directory activation-object mutation.
 
 | Field | Meaning |
 | --- | --- |
@@ -315,59 +390,67 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 | `/skhc`                               | `Set-WindowsKmsClient -HostCaching Enabled`                              |       Supported | Enables service-wide KMS host caching.                                                                                    |
 | `/ckhc`                               | `Set-WindowsKmsClient -HostCaching Disabled`                             |       Supported | Disables service-wide KMS host caching. `Start-WindowsActivation -CacheDisabled` remains available for combined use.      |
 
+### Volume activation policy
+
+| `slmgr.vbs` option                       | `slmgr-ps` equivalent                                                       |                Status | Notes                                                                 |
+| ---------------------------------------- | --------------------------------------------------------------------------- | --------------------: | --------------------------------------------------------------------- |
+| `/act-type`                              | `Set-WindowsActivationType -ActivationType Any`                             | Supported differently | Clears the activation-type restriction.                               |
+| `/act-type <0\|1\|2\|3>`                 | `Set-WindowsActivationType -ActivationType <Any\|ActiveDirectory\|Kms\|Token>` | Supported differently | Uses readable PowerShell values instead of numeric policy values.     |
+| `/act-type <0\|1\|2\|3> <Activation ID>` | Add `-ActivationId <ActivationId>`                                          | Supported differently | Applies the policy to the exact licensing product.                    |
+
 ### KMS server configuration options
 
-| `slmgr.vbs` option                       | `slmgr-ps` equivalent |          Status | Notes                                                                             |
-| ---------------------------------------- | --------------------- | --------------: | --------------------------------------------------------------------------------- |
-| `/sai <Interval>`                        | None                  | Not implemented | KMS host activation interval configuration is not currently supported.            |
-| `/sri <Interval>`                        | None                  | Not implemented | KMS host renewal interval configuration is not currently supported.               |
-| `/sprt <Port>`                           | None                  | Not implemented | KMS host listening-port configuration is not currently supported.                 |
-| `/sdns`                                  | None                  | Not implemented | KMS host DNS publishing enable is not currently supported.                        |
-| `/cdns`                                  | None                  | Not implemented | KMS host DNS publishing disable is not currently supported.                       |
-| `/spri`                                  | None                  | Not implemented | KMS host normal-priority configuration is not currently supported.                |
-| `/cpri`                                  | None                  | Not implemented | KMS host low-priority configuration is not currently supported.                   |
-| `/act-type`                              | None                  | Not implemented | Volume activation type clearing is not currently supported.                       |
-| `/act-type <0\|1\|2\|3>`                 | None                  | Not implemented | Global volume activation type configuration is not currently supported.           |
-| `/act-type <0\|1\|2\|3> <Activation ID>` | None                  | Not implemented | Product-specific volume activation type configuration is not currently supported. |
+| `slmgr.vbs` option | `slmgr-ps` equivalent |          Status | Notes                                                                  |
+| ------------------ | --------------------- | --------------: | ---------------------------------------------------------------------- |
+| `/sai <Interval>`  | None                  | Not implemented | KMS host activation interval configuration is not currently supported. |
+| `/sri <Interval>`  | None                  | Not implemented | KMS host renewal interval configuration is not currently supported.    |
+| `/sprt <Port>`     | None                  | Not implemented | KMS host listening-port configuration is not currently supported.      |
+| `/sdns`            | None                  | Not implemented | KMS host DNS publishing enable is not currently supported.             |
+| `/cdns`            | None                  | Not implemented | KMS host DNS publishing disable is not currently supported.            |
+| `/spri`            | None                  | Not implemented | KMS host normal-priority configuration is not currently supported.     |
+| `/cpri`            | None                  | Not implemented | KMS host low-priority configuration is not currently supported.        |
 
 ### Token-based activation options
 
-| `slmgr.vbs` option                    | `slmgr-ps` equivalent |          Status | Notes                                                            |
-| ------------------------------------- | --------------------- | --------------: | ---------------------------------------------------------------- |
-| `/lil`                                | None                  | Not implemented | Issuance-license listing is not currently supported.             |
-| `/ril <ILID> <ILvID>`                 | None                  | Not implemented | Issuance-license removal is not currently supported.             |
-| `/ltc`                                | None                  | Not implemented | Token activation certificate listing is not currently supported. |
-| `/fta <Certificate Thumbprint>`       | None                  | Not implemented | Token activation is not currently supported.                     |
-| `/fta <Certificate Thumbprint> <PIN>` | None                  | Not implemented | Token activation with PIN is not currently supported.            |
-| `/stao`                               | None                  | Not implemented | Deprecated in modern Windows; use `/act-type` in `slmgr.vbs`.    |
-| `/ctao`                               | None                  | Not implemented | Deprecated in modern Windows; use `/act-type` in `slmgr.vbs`.    |
+| `slmgr.vbs` option                    | `slmgr-ps` equivalent                                                     |                Status | Notes                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------- | --------------------: | ---------------------------------------------------------------------------- |
+| `/lil`                                | `Get-WindowsTokenActivationLicense`                                       |             Supported | Returns installed token activation issuance licenses as structured objects.  |
+| `/ril <ILID> <ILvID>`                 | `Remove-WindowsTokenActivationLicense -ILID <ILID> -ILVID <ILVID>`        |             Supported | Requires the exact issuance-license identity and verifies removal.            |
+| `/ltc`                                | None                                                                      | Not implemented       | Token activation certificate listing is not currently supported.             |
+| `/fta <Certificate Thumbprint>`       | None                                                                      | Not implemented       | Certificate-driven token activation is not currently supported.               |
+| `/fta <Certificate Thumbprint> <PIN>` | None                                                                      | Not implemented       | PIN-assisted token activation is not implemented through undocumented paths. |
+| `/stao`                               | `Set-WindowsActivationType -ActivationType Token`                         | Supported differently | Uses the modern activation-type policy interface.                             |
+| `/ctao`                               | `Set-WindowsActivationType -ActivationType Any`                           | Supported differently | Clears the activation-type restriction.                                       |
 
 ### Active Directory-based activation options
 
-| `slmgr.vbs` option                                                                  | `slmgr-ps` equivalent |          Status | Notes                                                                |
-| ----------------------------------------------------------------------------------- | --------------------- | --------------: | -------------------------------------------------------------------- |
-| `/ad-activation-online <Product Key>`                                               | None                  | Not implemented | AD-based activation is not currently supported.                      |
-| `/ad-activation-online <Product Key> <Activation Object name>`                      | None                  | Not implemented | AD activation object naming is not currently supported.              |
-| `/ad-activation-get-iid <Product Key>`                                              | None                  | Not implemented | AD phone activation IID generation is not currently supported.       |
-| `/ad-activation-apply-cid <Product Key> <Confirmation ID>`                          | None                  | Not implemented | AD offline activation confirmation is not currently supported.       |
-| `/ad-activation-apply-cid <Product Key> <Confirmation ID> <Activation Object name>` | None                  | Not implemented | AD offline activation with object naming is not currently supported. |
-| `/ao-list`                                                                          | None                  | Not implemented | AD activation-object listing is not currently supported.             |
-| `/del-ao <AO_DN>` or `/del-ao <AO_RDN>`                                             | None                  | Not implemented | AD activation-object deletion is not currently supported.            |
+| `slmgr.vbs` option                                                                  | `slmgr-ps` equivalent                                                                                               |                Status | Notes                                                                                                     |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------: | --------------------------------------------------------------------------------------------------------- |
+| `/ad-activation-online <Product Key>`                                               | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                               | Supported differently | `slmgr-ps` requires an explicit object name so duplicate detection and post-create verification are exact. |
+| `/ad-activation-online <Product Key> <Activation Object name>`                      | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                               |             Supported | Creates and verifies the named activation object.                                                          |
+| `/ad-activation-get-iid <Product Key>`                                              | `Get-WindowsADActivationInstallationId -ProductKey <ProductKey>`                                                     |             Supported | Returns structured installation-ID output for a resumable offline workflow.                               |
+| `/ad-activation-apply-cid <Product Key> <Confirmation ID>`                          | `New-WindowsADActivationObject -ProductKey <ProductKey> -ConfirmationId <ConfirmationId> -ActivationObjectName <Name>` | Supported differently | `slmgr-ps` requires an explicit object name.                                                               |
+| `/ad-activation-apply-cid <Product Key> <Confirmation ID> <Activation Object name>` | `New-WindowsADActivationObject -ProductKey <ProductKey> -ConfirmationId <ConfirmationId> -ActivationObjectName <Name>` |             Supported | Deposits the confirmation ID and verifies the named object.                                               |
+| `/ao-list`                                                                          | `Get-WindowsADActivationObject`                                                                                      |             Supported | Returns structured activation-object records from the AD configuration partition.                        |
+| `/del-ao <AO_DN>`                                                                   | `Remove-WindowsADActivationObject -DistinguishedName <AO_DN>`                                                       |             Supported | Requires the exact distinguished name and high-impact confirmation.                                       |
+| `/del-ao <AO_RDN>`                                                                  | None                                                                                                                 | Deliberately unsupported | RDN-only deletion is intentionally rejected to avoid ambiguous directory mutations.                    |
 
 ## Design differences from slmgr.vbs
 
 `slmgr-ps` is not a direct port of the command-line interface. It uses PowerShell conventions instead.
 
-- It accepts arrays of computer names.
+- It accepts arrays of computer names where the underlying operation supports batching.
 - It uses `PSCredential` rather than command-line password arguments.
-- It uses CIM sessions.
-- Remote execution uses WinRM.
+- It uses CIM sessions for Software Protection Platform remote operations.
+- Remote CIM execution uses WinRM.
+- Active Directory activation-object operations use the ActiveDirectory PowerShell module and directory credentials separately from CIM.
 - It returns PowerShell objects for reporting commands and stable operation-result objects for mutating commands.
 - It supports PowerShell pipeline-friendly usage.
 - It includes KMS client setup keys for supported Windows editions.
 - It combines explicit product-key installation and activation in one command.
 - It installs license files on multiple targets from controller-side paths.
 - It keeps system-license repair local to prevent cross-machine license-file use.
+- It requires exact identifiers for destructive token and Active Directory operations rather than accepting ambiguous shorthand.
 - It works without Windows Script Host, so environments that block `cscript.exe` and `wscript.exe` can still perform supported activation workflows.
 
 ## Current limitations
@@ -376,15 +459,18 @@ The following areas are intentionally not presented as supported yet:
 
 - KMS server configuration, including listening port, DNS publishing, intervals, and process priority.
 - Remote system-license repair; `Repair-WindowsLicense` is local-only by design.
-- Token-based activation.
-- Active Directory-based activation.
+- Token activation certificate listing and certificate/PIN-driven activation.
+- RDN-only Active Directory activation-object deletion; an exact distinguished name is required.
+- Active Directory activation-object operations require the ActiveDirectory PowerShell module and appropriate forest connectivity and privileges.
 - `slmgr.vbs` command-line syntax compatibility.
 
 ## Security notes
 
 Avoid passing secrets directly on the command line. `slmgr.vbs` supports a command shape that includes username and password as arguments. `slmgr-ps` uses `PSCredential` instead, which is more appropriate for PowerShell usage and avoids exposing passwords in command-line history or process listings.
 
-An explicit `-ProductKey` remains plain command-line input and may be retained in PowerShell history. Protect shell history and automation logs, and avoid recording the full invocation in shared diagnostics.
+Explicit product keys and confirmation IDs remain plain command-line input and may be retained in PowerShell history. Protect shell history and automation logs, and avoid recording full invocations containing those values in shared diagnostics. The module does not intentionally include those secrets in normal result objects or routine provider-error metadata.
+
+Token PIN handling is deliberately unsupported rather than routed through undocumented interfaces. Active Directory activation-object deletion requires an exact resolved distinguished name and high-impact `ShouldProcess` confirmation.
 
 For calls containing multiple computers or license files, mutating commands attempt every applicable item before reporting collected failures. Successful targets emit normal operation-result objects. Failed targets are represented in the final `LicensingBatchFailed` error, so automation must treat the invocation as failed even when later operations succeeded.
 
@@ -396,8 +482,11 @@ Use `-Verbose` for operational detail:
 
 ```powershell
 Get-WindowsActivation -Verbose
+Get-WindowsTokenActivationLicense -Verbose
+Get-WindowsADActivationObject -Verbose
 Install-WindowsLicense -Path C:\Licenses\example.xrm-ms -Verbose
 Repair-WindowsLicense -Verbose
+Set-WindowsActivationType -ActivationType Kms -Verbose
 Set-WindowsKmsClient -KmsServer kms01.example.test -Verbose
 Start-WindowsActivation -Verbose
 Reset-WindowsActivation -Verbose -ClearKMSSettings
@@ -409,7 +498,7 @@ Use `-Debug` when investigating lower-level behavior:
 Start-WindowsActivation -Debug
 ```
 
-The module can be imported without elevation for read-only commands. Mutating operations should be run with credentials that have the required privileges on the target computer.
+The module can be imported without elevation for read-only commands. Mutating SPP operations should be run with credentials that have the required privileges on the target computer. Active Directory activation-object operations require directory permissions appropriate to the requested read, creation, or deletion operation.
 
 ## Contributing
 
@@ -419,6 +508,7 @@ Useful contribution areas include:
 
 - Adding KMS server configuration workflows after the client capability path is complete.
 - Adding tests for CIM provider compatibility across supported Windows versions.
+- Adding Active Directory integration tests for forest reachability, duplicate objects, privileges, and verified publication/deletion.
 - Improving documentation and examples.
 
 Please refer to [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidance.
