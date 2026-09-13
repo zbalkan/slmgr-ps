@@ -12,41 +12,43 @@ explicit product key before activating it in the same operation.
 .INPUTS
 string[]. You can pass the computer names
 .OUTPUTS
-None if successful. Throws on error.
+slmgr-ps.LicensingOperationResult. One result is emitted for each attempted computer.
+Throws one aggregate error after processing the requested computer batch when any
+computer fails.
 .EXAMPLE
-Start-WindowsActivation -Verbose # Activates the local computer using its existing product key
+Start-WindowsActivation -Verbose
 .EXAMPLE
-Start-WindowsActivation -UseKmsClientKey -Verbose # Installs the GVLK for the detected OS edition then activates
+Start-WindowsActivation -UseKmsClientKey -Verbose
 .EXAMPLE
-Start-WindowsActivation -ProductKey XXXXX-XXXXX-XXXXX-XXXXX-XXXXX # Installs an explicit product key then activates
+Start-WindowsActivation -ProductKey XXXXX-XXXXX-XXXXX-XXXXX-XXXXX
 .EXAMPLE
-Start-WindowsActivation -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee # Activates one licensing product
+Start-WindowsActivation -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
 .EXAMPLE
-Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential) # Activates WS01 over WinRM
+Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
 .EXAMPLE
-Start-WindowsActivation -Computer WS01, WS02 -CacheDisabled # Disables the KMS cache on WS01 and WS02
+Start-WindowsActivation -Computer WS01, WS02 -CacheDisabled
 .EXAMPLE
-Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500 # Activates against a specific KMS server
+Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServerPort 2500
 .EXAMPLE
-Start-WindowsActivation -ReArm # ReArm the trial period (guard clauses apply but cannot guarantee 100% safety)
+Start-WindowsActivation -ReArm
 .EXAMPLE
-Start-WindowsActivation -ReArm -ApplicationId 11111111-2222-3333-4444-555555555555 # ReArm one application
+Start-WindowsActivation -ReArm -ApplicationId 11111111-2222-3333-4444-555555555555
 .EXAMPLE
-Start-WindowsActivation -ReArm -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee # ReArm one licensing product
+Start-WindowsActivation -ReArm -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
 .EXAMPLE
-Start-WindowsActivation -Offline -ConfirmationID 123456-123456-123456-123456-123456-123456-123456-123456-123456 # Phone activation
+Start-WindowsActivation -Offline -ConfirmationID 123456-123456-123456-123456-123456-123456-123456-123456-123456
 .LINK
 https://github.com/zbalkan/slmgr-ps
 #>
 function Start-WindowsActivation
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $false,
         ConfirmImpact = 'High',
         DefaultParameterSetName = 'ActivateWithKMS')]
     Param
     (
-        # Type localhost or . for local computer or do not use the parameter
         [Parameter(Mandatory = $false,
             Position = 0,
             ValueFromPipeline = $true,
@@ -59,7 +61,6 @@ function Start-WindowsActivation
         [string[]]
         $Computer = @('localhost'),
 
-        # Define credentials other than current user if needed
         [Parameter(Mandatory = $false,
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
@@ -116,9 +117,6 @@ function Start-WindowsActivation
         [switch]
         $CacheDisabled,
 
-        # Installs the KMS client setup key (GVLK) for the detected OS edition before
-        # attempting activation. Only needed when the machine currently has a MAK or retail
-        # key and must be switched to volume/KMS licensing. This is a material licensing change.
         [Parameter(Mandatory = $false,
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
@@ -159,7 +157,6 @@ function Start-WindowsActivation
             ParameterSetName = 'Offline')]
         [ValidateScript(
             {
-                # Accept 54 digits (9 groups × 6), optionally separated by dashes or spaces
                 $stripped = $_ -replace '[\s\-]', ''
                 if ($stripped -match '^\d{54}$')
                 {
@@ -173,7 +170,6 @@ function Start-WindowsActivation
         [ValidateNotNullOrEmpty()]
         [string]
         $ConfirmationId
-
     )
     Begin
     {
@@ -210,10 +206,23 @@ function Start-WindowsActivation
             }
             $resolvedKmsEndpoint = Resolve-KmsEndpoint @endpointParameters
         }
+
+        $activationFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
+        $requestedActivationId = if ($hasActivationId) { $ActivationId } else { $null }
+        $operation = switch ($PSCmdlet.ParameterSetName)
+        {
+            'Offline' { 'OfflineActivation' }
+            'Rearm'
+            {
+                if ($hasApplicationId) { 'RearmApplication' }
+                elseif ($hasActivationId) { 'RearmSku' }
+                else { 'RearmWindows' }
+            }
+            default { 'Activate' }
+        }
     }
     Process
     {
-        $activationFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
         Write-Verbose "Enumerating computers: $($Computer.Count) computer(s)."
         foreach ($c in $Computer)
         {
@@ -235,6 +244,7 @@ function Start-WindowsActivation
 
             Write-Verbose "Creating new CimSession for computer $c"
             $session = $null
+            $outcome = $null
             try
             {
                 $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
@@ -252,8 +262,8 @@ function Start-WindowsActivation
                             Service        = $service
                             ConfirmationId = $ConfirmationId
                         }
-                        if ($PSBoundParameters.ContainsKey('ActivationId')) { $offlineParams['ActivationId'] = $ActivationId }
-                        Invoke-OfflineActivation @offlineParams
+                        if ($hasActivationId) { $offlineParams['ActivationId'] = $ActivationId }
+                        $outcome = Invoke-OfflineActivation @offlineParams
                     }
 
                     'Rearm'
@@ -262,7 +272,7 @@ function Start-WindowsActivation
                         $rearmParams = @{ CimSession = $session; Service = $service }
                         if ($hasApplicationId) { $rearmParams['ApplicationId'] = $ApplicationId }
                         if ($hasActivationId) { $rearmParams['ActivationId'] = $ActivationId }
-                        Invoke-Rearm @rearmParams
+                        $outcome = Invoke-Rearm @rearmParams
                     }
 
                     'ActivateWithKMS'
@@ -287,9 +297,9 @@ function Start-WindowsActivation
                             $kmsParams['KMSServerPort'] = $KMSServerPort
                         }
                         if ($UseKmsClientKey.IsPresent) { $kmsParams['InstallKmsClientKey'] = $true }
-                        if ($PSBoundParameters.ContainsKey('ProductKey')) { $kmsParams['ProductKey'] = $ProductKey }
-                        if ($PSBoundParameters.ContainsKey('ActivationId')) { $kmsParams['ActivationId'] = $ActivationId }
-                        Invoke-KMSActivation @kmsParams
+                        if ($hasProductKey) { $kmsParams['ProductKey'] = $ProductKey }
+                        if ($hasActivationId) { $kmsParams['ActivationId'] = $ActivationId }
+                        $outcome = Invoke-KMSActivation @kmsParams
                     }
 
                     default
@@ -297,10 +307,47 @@ function Start-WindowsActivation
                         throw 'Unknown parameter combination'
                     }
                 }
+
+                $resultActivationId = if ($null -ne $outcome -and $null -ne $outcome.ActivationId)
+                {
+                    $outcome.ActivationId
+                }
+                else
+                {
+                    $requestedActivationId
+                }
+                $productName = if ($null -ne $outcome) { $outcome.ProductName } else { $null }
+                $verificationState = if ($null -ne $outcome -and -not [string]::IsNullOrEmpty($outcome.VerificationState))
+                {
+                    $outcome.VerificationState
+                }
+                else
+                {
+                    'ProviderAccepted'
+                }
+                $restartRequired = $false
+                if ($null -ne $outcome) { $restartRequired = [bool]$outcome.RestartRequired }
+                elseif ($PSCmdlet.ParameterSetName -eq 'Rearm') { $restartRequired = $true }
+
+                New-LicensingOperationResult `
+                    -ComputerName $c `
+                    -Operation $operation `
+                    -Success $true `
+                    -ActivationId $resultActivationId `
+                    -ProductName $productName `
+                    -RestartRequired $restartRequired `
+                    -VerificationState $verificationState
             }
             catch
             {
-                $activationFailures.Add($_)
+                $structured = New-LicensingOperationError `
+                    -ErrorRecord $_ `
+                    -ComputerName $c `
+                    -Operation $operation `
+                    -ActivationId $requestedActivationId `
+                    -RestartRequired ($PSCmdlet.ParameterSetName -eq 'Rearm')
+                $activationFailures.Add($structured.ErrorRecord)
+                Write-Output $structured.Result
             }
             finally
             {
@@ -310,14 +357,9 @@ function Start-WindowsActivation
                 }
             }
         }
-
-        if ($activationFailures.Count -gt 0)
-        {
-            foreach ($failure in $activationFailures)
-            {
-                Write-Error -ErrorRecord $failure
-            }
-            $PSCmdlet.ThrowTerminatingError($activationFailures[0])
-        }
+    }
+    End
+    {
+        Complete-LicensingOperationBatch -Failures $activationFailures
     }
 }
