@@ -32,7 +32,7 @@ Describe 'New-LicensingOperationError' {
         $structured.ErrorRecord.Exception.InnerException | Should -Be $providerException
     }
 
-    It 'normalizes an exception HRESULT when provider metadata is absent' {
+    It 'does not mislabel a generic exception HRESULT as a licensing error code' {
         $exception = [System.InvalidOperationException]::new('Generic failure')
         $errorRecord = [System.Management.Automation.ErrorRecord]::new(
             $exception,
@@ -43,7 +43,7 @@ Describe 'New-LicensingOperationError' {
         $structured = New-LicensingOperationError `
             -ErrorRecord $errorRecord -ComputerName localhost -Operation Test
 
-        $structured.Result.ErrorCode | Should -Match '^0x[0-9A-F]{8}$'
+        $structured.Result.ErrorCode | Should -BeNullOrEmpty
     }
 }
 
