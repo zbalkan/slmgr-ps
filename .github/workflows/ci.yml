@@ -52,6 +52,7 @@ jobs:
             'Install-WindowsLicense'
             'Repair-WindowsLicense'
             'Reset-WindowsActivation'
+            'Set-WindowsKmsClient'
             'Start-WindowsActivation'
           ) | Sort-Object
           if (Compare-Object $exported $expected)

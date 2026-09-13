@@ -44,6 +44,38 @@ Describe 'Invoke-SppCimMethod' {
         } -Times 2
     }
 
+    It 'forwards a KMS lookup domain to either licensing class' {
+        $arguments = @{ LookupDomain = 'kms.example.test' }
+        $script:Service | Invoke-SppCimMethod -MethodName SetKeyManagementServiceLookupDomain `
+            -Arguments $arguments
+        $script:Product | Invoke-SppCimMethod -MethodName SetKeyManagementServiceLookupDomain `
+            -Arguments $arguments
+
+        Should -Invoke Invoke-CimMethod -ParameterFilter {
+            $MethodName -eq 'SetKeyManagementServiceLookupDomain' -and
+            $Arguments.LookupDomain -eq 'kms.example.test'
+        } -Times 2
+    }
+
+    It 'forwards the host-caching toggle to the licensing service' {
+        $script:Service | Invoke-SppCimMethod -MethodName DisableKeyManagementServiceHostCaching `
+            -Arguments @{ DisableCaching = $true }
+
+        Should -Invoke Invoke-CimMethod -ParameterFilter {
+            $MethodName -eq 'DisableKeyManagementServiceHostCaching' -and
+            $Arguments.DisableCaching -eq $true
+        } -Times 1
+    }
+
+    It 'rejects host-caching changes on a licensing product' {
+        {
+            $script:Product | Invoke-SppCimMethod `
+                -MethodName DisableKeyManagementServiceHostCaching `
+                -Arguments @{ DisableCaching = $true }
+        } | Should -Throw -ExpectedMessage '*requires SoftwareLicensingService*'
+        Should -Invoke Invoke-CimMethod -Times 0
+    }
+
     It 'throws when the provider returns a non-zero value' {
         Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = 5 } }
         { $script:Product | Invoke-SppCimMethod -MethodName Activate } |

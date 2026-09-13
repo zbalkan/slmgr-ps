@@ -1,4 +1,5 @@
 BeforeAll {
+    . $PSScriptRoot/../src/Private/Resolve-KmsEndpoint.ps1
     . $PSScriptRoot/../src/Public/Start-WindowsActivation.ps1
 
     function Get-Session {
@@ -20,6 +21,13 @@ BeforeAll {
     }
     function Invoke-Rearm {
         param($CimSession, $Service, [Guid]$ApplicationId, [Guid]$ActivationId)
+    }
+    function Invoke-SppCimMethod {
+        param(
+            [Parameter(ValueFromPipeline)]$InputObject,
+            [string]$MethodName,
+            [hashtable]$Arguments
+        )
     }
 
     $script:MockCimSession = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
@@ -77,6 +85,32 @@ Describe 'Start-WindowsActivation' {
 
         Should -Invoke Invoke-KMSActivation -Times 1 -ParameterFilter {
             $ProductKey -eq 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE'
+        }
+    }
+
+    It 'normalizes an embedded KMS server port before activation' {
+        Start-WindowsActivation -KmsServer '[2001:db8::10]:2500' -Confirm:$false
+
+        Should -Invoke Invoke-KMSActivation -Times 1 -ParameterFilter {
+            $KMSServerFQDN -eq '2001:db8::10' -and $KMSServerPort -eq 2500
+        }
+    }
+
+    It 'rejects an ambiguous KMS server before opening a session' {
+        { Start-WindowsActivation -KmsServer '2001:db8::10' -Confirm:$false } |
+            Should -Throw -ExpectedMessage '*must be enclosed in brackets*'
+
+        Should -Invoke Get-Session -Times 0
+    }
+
+    It 'passes the required Boolean when disabling KMS host caching' {
+        Mock Invoke-SppCimMethod {}
+
+        Start-WindowsActivation -CacheDisabled -Confirm:$false
+
+        Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+            $MethodName -eq 'DisableKeyManagementServiceHostCaching' -and
+            $Arguments.DisableCaching -eq $true
         }
     }
 

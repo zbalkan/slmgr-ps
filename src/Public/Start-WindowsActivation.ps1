@@ -77,19 +77,7 @@ function Start-WindowsActivation
             ValueFromPipelineByPropertyName = $false,
             ValueFromRemainingArguments = $false,
             ParameterSetName = 'ActivateWithKMS')]
-        [ValidateLength(6, 253)]
-        [ValidateScript(
-            {
-                $pattern = [Regex]::new('(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{0,62}[a-zA-Z0-9]\.)+[a-zA-Z]{2,63}$)')
-                if ($pattern.Matches($_).Count -gt 0)
-                {
-                    $true
-                }
-                else
-                {
-                    throw "$_ is invalid. Please provide a valid FQDN"
-                }
-            })]
+        [Alias('KmsServer')]
         [ValidateNotNullOrEmpty()]
         [string]
         $KMSServerFQDN,
@@ -213,6 +201,15 @@ function Start-WindowsActivation
         {
             throw 'ProductKey must contain five groups of five alphanumeric characters separated by dashes.'
         }
+        if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
+        {
+            $endpointParameters = @{ Endpoint = $KMSServerFQDN }
+            if ($PSBoundParameters.ContainsKey('KMSServerPort'))
+            {
+                $endpointParameters['Port'] = $KMSServerPort
+            }
+            $resolvedKmsEndpoint = Resolve-KmsEndpoint @endpointParameters
+        }
     }
     Process
     {
@@ -273,13 +270,22 @@ function Start-WindowsActivation
                         if ($CacheDisabled.IsPresent)
                         {
                             Write-Verbose 'Disabling KMS host caching'
-                            $service | Invoke-SppCimMethod -MethodName DisableKeyManagementServiceHostCaching
+                            $service | Invoke-SppCimMethod `
+                                -MethodName DisableKeyManagementServiceHostCaching `
+                                -Arguments @{ DisableCaching = $true }
                         }
 
                         Write-Verbose 'Initiating Windows activation operation'
                         $kmsParams = @{ CimSession = $session; Service = $service }
-                        if ($PSBoundParameters.ContainsKey('KMSServerFQDN')) { $kmsParams['KMSServerFQDN'] = $KMSServerFQDN }
-                        if ($PSBoundParameters.ContainsKey('KMSServerPort')) { $kmsParams['KMSServerPort'] = $KMSServerPort }
+                        if ($PSBoundParameters.ContainsKey('KMSServerFQDN'))
+                        {
+                            $kmsParams['KMSServerFQDN'] = $resolvedKmsEndpoint.Host
+                            $kmsParams['KMSServerPort'] = $resolvedKmsEndpoint.Port
+                        }
+                        elseif ($PSBoundParameters.ContainsKey('KMSServerPort'))
+                        {
+                            $kmsParams['KMSServerPort'] = $KMSServerPort
+                        }
                         if ($UseKmsClientKey.IsPresent) { $kmsParams['InstallKmsClientKey'] = $true }
                         if ($PSBoundParameters.ContainsKey('ProductKey')) { $kmsParams['ProductKey'] = $ProductKey }
                         if ($PSBoundParameters.ContainsKey('ActivationId')) { $kmsParams['ActivationId'] = $ActivationId }

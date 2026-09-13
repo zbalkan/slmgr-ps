@@ -27,7 +27,11 @@ function Get-WindowsLicensingProduct
         'ProductKeyID', 'ProductKeyChannel', 'OfflineInstallationId',
         'UseLicenseURL', 'ValidationURL', 'PartialProductKey', 'LicenseStatus',
         'GracePeriodRemaining', 'RemainingAppReArmCount',
-        'RemainingSkuReArmCount', 'TrustedTime'
+        'RemainingSkuReArmCount', 'TrustedTime',
+        'KeyManagementServiceMachine', 'KeyManagementServicePort',
+        'DiscoveredKeyManagementServiceMachineName',
+        'DiscoveredKeyManagementServiceMachinePort',
+        'KeyManagementServiceLookupDomain'
     )
     $query = "SELECT $($properties -join ', ') FROM SoftwareLicensingProduct"
 
