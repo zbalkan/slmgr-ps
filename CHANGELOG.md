@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-13
+
+### Added
+
+* Added `Get-WindowsADActivationInstallationId` for generating resumable Active Directory activation installation IDs.
+* Added `New-WindowsADActivationObject` for online activation-object creation and offline confirmation-ID completion.
+* Added `Get-WindowsADActivationObject` for reporting activation objects from the documented `msSPP-ActivationObject` directory class.
+* Added `Remove-WindowsADActivationObject` for exact distinguished-name deletion with high-impact confirmation.
+* Added Software Protection Platform contracts for online AD activation, offline installation-ID generation, and offline confirmation processing.
+* Added Active Directory activation object name, distinguished name, CSVLK PID, and CSVLK SKU ID to extended activation reporting.
+
+### Changed
+
+* Active Directory activation-object creation now requires an explicit object name so duplicate checks and post-mutation verification remain unambiguous.
+* Directory operations resolve the documented activation-object container through Active Directory rather than constructing LDAP paths.
+* Active Directory mutations report the resolved forest, domain, object name, and distinguished name in their result objects.
+* The module now exports thirteen public commands.
+
+### Security
+
+* Product keys and confirmation IDs are not included in operation results or routine diagnostic output.
+* Activation-object deletion accepts only an exact distinguished name and uses `ShouldProcess` with high confirmation impact.
+
 ## [1.7.0] - 2026-09-13
 
 ### Added
