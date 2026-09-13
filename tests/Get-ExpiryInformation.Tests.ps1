@@ -6,9 +6,26 @@ BeforeAll {
 
 Describe 'Get-ExpiryInformation' {
 
+    BeforeAll {
+        function New-TestLicensingProduct
+        {
+            param([hashtable]$Property)
+
+            $cimProperty = @{}
+            foreach ($name in $Property.Keys)
+            {
+                if ($null -ne $Property[$name])
+                {
+                    $cimProperty[$name] = $Property[$name]
+                }
+            }
+            New-CimInstance -ClassName SoftwareLicensingProduct -ClientOnly -Property $cimProperty
+        }
+    }
+
     It 'Reports permanent activation when Licensed with no grace remaining' {
         Mock Get-WindowsLicensingProduct {
-            [PSCustomObject]@{
+            New-TestLicensingProduct @{
                 Name                = 'Windows 11 Pro'
                 LicenseStatus       = 1
                 GracePeriodRemaining = 0
@@ -21,7 +38,7 @@ Describe 'Get-ExpiryInformation' {
 
     It 'Reports permanent activation when Licensed with null grace' {
         Mock Get-WindowsLicensingProduct {
-            [PSCustomObject]@{
+            New-TestLicensingProduct @{
                 Name                = 'Windows 11 Pro'
                 LicenseStatus       = 1
                 GracePeriodRemaining = $null
@@ -34,7 +51,7 @@ Describe 'Get-ExpiryInformation' {
 
     It 'Reports timebased expiry for TIMEBASED_ description' {
         Mock Get-WindowsLicensingProduct {
-            [PSCustomObject]@{
+            New-TestLicensingProduct @{
                 Name                = 'Windows 11 Pro'
                 LicenseStatus       = 1
                 GracePeriodRemaining = 43200
@@ -47,7 +64,7 @@ Describe 'Get-ExpiryInformation' {
 
     It 'Reports VM activation expiry for VIRTUAL_MACHINE_ACTIVATION description' {
         Mock Get-WindowsLicensingProduct {
-            [PSCustomObject]@{
+            New-TestLicensingProduct @{
                 Name                = 'Windows 11 Pro'
                 LicenseStatus       = 1
                 GracePeriodRemaining = 43200
@@ -60,7 +77,7 @@ Describe 'Get-ExpiryInformation' {
 
     It 'Reports OOBGrace end date when status is 2' {
         Mock Get-WindowsLicensingProduct {
-            [PSCustomObject]@{
+            New-TestLicensingProduct @{
                 Name                = 'Windows 11 Pro'
                 LicenseStatus       = 2
                 GracePeriodRemaining = 43200
@@ -73,7 +90,7 @@ Describe 'Get-ExpiryInformation' {
 
     It 'Uses PascalCase property names' {
         Mock Get-WindowsLicensingProduct {
-            [PSCustomObject]@{
+            New-TestLicensingProduct @{
                 Name                = 'Windows 11 Pro'
                 LicenseStatus       = 1
                 GracePeriodRemaining = 0

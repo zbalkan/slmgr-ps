@@ -1,10 +1,26 @@
 BeforeAll {
     . $PSScriptRoot/../src/Private/Invoke-KMSActivation.ps1
 
-    function Get-LicenseStatus {}
-    function Get-KMSKey {}
-    function Get-WindowsLicensingProduct {}
-    function Invoke-SppCimMethod {}
+    function Get-LicenseStatus
+    {
+        param($CimSession, [Guid]$ActivationId)
+    }
+    function Get-KMSKey
+    {
+        param($CimSession)
+    }
+    function Get-WindowsLicensingProduct
+    {
+        param($CimSession, [Guid]$ActivationId, [string]$PartialProductKey)
+    }
+    function Invoke-SppCimMethod
+    {
+        param(
+            [Parameter(ValueFromPipeline)]$InputObject,
+            [string]$MethodName,
+            [hashtable]$Arguments
+        )
+    }
 
     $script:Session = New-MockObject -Type 'Microsoft.Management.Infrastructure.CimSession'
     $script:Service = New-CimInstance -ClassName SoftwareLicensingService -ClientOnly
@@ -121,7 +137,7 @@ Describe 'Invoke-KMSActivation product-key installation' {
     }
 
     It 'resolves, activates, and verifies the requested activation ID' {
-        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        $expectedActivationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         $script:StatusCall = 0
         Mock Get-LicenseStatus {
             $script:StatusCall++
@@ -133,24 +149,24 @@ Describe 'Invoke-KMSActivation product-key installation' {
             {
                 [PSCustomObject]@{ Activated = $true; LicenseStatus = 'Licensed' }
             }
-        } -ParameterFilter { $ActivationId -eq $activationId }
+        } -ParameterFilter { $ActivationId -eq $expectedActivationId }
 
         Invoke-KMSActivation -CimSession $script:Session -Service $script:Service `
-            -ActivationId $activationId
+            -ActivationId $expectedActivationId
 
         Should -Invoke Get-WindowsLicensingProduct -Times 1 -ParameterFilter {
-            $ActivationId -eq $activationId
+            $ActivationId -eq $expectedActivationId
         }
         Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
             $MethodName -eq 'Activate' -and $InputObject -eq $script:Product
         }
         Should -Invoke Get-LicenseStatus -Times 2 -ParameterFilter {
-            $ActivationId -eq $activationId
+            $ActivationId -eq $expectedActivationId
         }
     }
 
     It 'applies KMS client settings to the requested activation product' {
-        $activationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        $expectedActivationId = [Guid]'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
         $script:StatusCall = 0
         Mock Get-LicenseStatus {
             $script:StatusCall++
@@ -161,7 +177,11 @@ Describe 'Invoke-KMSActivation product-key installation' {
         }
 
         Invoke-KMSActivation -CimSession $script:Session -Service $script:Service `
-            -ActivationId $activationId -KMSServerFQDN 'kms.example.com' -KMSServerPort 1689
+            -ActivationId $expectedActivationId -KMSServerFQDN 'kms.example.com' -KMSServerPort 1689
+
+        Should -Invoke Get-WindowsLicensingProduct -Times 1 -ParameterFilter {
+            $ActivationId -eq $expectedActivationId
+        }
 
         Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
             $MethodName -eq 'SetKeyManagementServiceMachine' -and

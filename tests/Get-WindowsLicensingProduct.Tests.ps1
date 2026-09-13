@@ -179,6 +179,8 @@ Describe 'Get-WindowsLicensingProduct' {
         }
 
         It 'cannot combine all products with an activation ID' {
+            Mock Get-CimInstance {}
+
             { Get-WindowsLicensingProduct -CimSession $script:MockCimSession -All `
                     -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' } |
                 Should -Throw
@@ -246,6 +248,8 @@ Describe 'Get-WindowsLicensingProduct' {
         }
 
         It 'rejects an invalid partial key before querying CIM' {
+            Mock Get-CimInstance {}
+
             { Get-WindowsLicensingProduct -CimSession $script:MockCimSession `
                     -PartialProductKey 'BAD' } | Should -Throw
 
