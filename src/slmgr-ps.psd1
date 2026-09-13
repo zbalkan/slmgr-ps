@@ -12,7 +12,7 @@
     RootModule        = 'slmgr-ps.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.4.0'
+    ModuleVersion     = '1.5.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -114,7 +114,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'Completed KMS client endpoint, port, lookup-domain, reset, and host-caching controls; added activation-ID targeting, endpoint validation, extended KMS reporting, and corrected provider argument handling.'
+            ReleaseNotes = 'Standardized mutation results, batch error identity, provider HRESULT reporting, verification state, and extended activation diagnostics.'
 
             # External dependent modules of this module
             # ExternalModuleDependencies = ''
