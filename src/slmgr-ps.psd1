@@ -12,7 +12,7 @@
     RootModule        = 'slmgr-ps.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.8.0'
+    ModuleVersion     = '1.9.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -73,6 +73,7 @@
         'Get-WindowsActivation'
         'Get-WindowsADActivationInstallationId'
         'Get-WindowsADActivationObject'
+        'Get-WindowsKmsHost'
         'Get-WindowsTokenActivationLicense'
         'Install-WindowsLicense'
         'New-WindowsADActivationObject'
@@ -82,6 +83,7 @@
         'Reset-WindowsActivation'
         'Set-WindowsActivationType'
         'Set-WindowsKmsClient'
+        'Set-WindowsKmsHost'
         'Start-WindowsActivation'
     )
 
@@ -121,7 +123,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'Added documented Active Directory-based activation object creation, offline installation-ID generation and confirmation, reporting, and exact distinguished-name deletion.'
+            ReleaseNotes = 'Added documented KMS host reporting and configuration for listening port, DNS publishing, priority, activation interval, and renewal interval.'
 
             # External dependent modules of this module
             # ExternalModuleDependencies = ''
