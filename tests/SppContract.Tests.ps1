@@ -4,6 +4,7 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
         $script:Contract = Get-SppContract
         $script:ServiceClass = Get-CimClass -Namespace root/cimv2 -ClassName SoftwareLicensingService
         $script:ProductClass = Get-CimClass -Namespace root/cimv2 -ClassName SoftwareLicensingProduct
+        $script:TokenLicenseClass = Get-CimClass -Namespace root/cimv2 -ClassName SoftwareLicensingTokenActivationLicense
     }
 
     It 'exposes the product properties required for targeting' {
@@ -13,10 +14,17 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
         }
     }
 
-    It 'exposes the service properties required for KMS client reporting' {
+    It 'exposes the service properties required for KMS and token reporting' {
         foreach ($property in $script:Contract.ServiceProperties)
         {
             $script:ServiceClass.CimClassProperties.Name | Should -Contain $property
+        }
+    }
+
+    It 'exposes the documented token activation license properties' {
+        foreach ($property in $script:Contract.TokenActivationLicenseProperties)
+        {
+            $script:TokenLicenseClass.CimClassProperties.Name | Should -Contain $property
         }
     }
 
@@ -25,13 +33,11 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
         {
             foreach ($className in $script:Contract.Methods[$method].Classes)
             {
-                $class = if ($className -eq 'SoftwareLicensingService')
+                $class = switch ($className)
                 {
-                    $script:ServiceClass
-                }
-                else
-                {
-                    $script:ProductClass
+                    'SoftwareLicensingService' { $script:ServiceClass }
+                    'SoftwareLicensingTokenActivationLicense' { $script:TokenLicenseClass }
+                    default { $script:ProductClass }
                 }
                 $class.CimClassMethods.Name | Should -Contain $method
             }
@@ -45,13 +51,11 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
             if ($expectedArguments.Count -eq 0) { continue }
 
             $className = @($script:Contract.Methods[$method].Classes)[0]
-            $class = if ($className -eq 'SoftwareLicensingService')
+            $class = switch ($className)
             {
-                $script:ServiceClass
-            }
-            else
-            {
-                $script:ProductClass
+                'SoftwareLicensingService' { $script:ServiceClass }
+                'SoftwareLicensingTokenActivationLicense' { $script:TokenLicenseClass }
+                default { $script:ProductClass }
             }
             $declaration = @($class.CimClassMethods | Where-Object Name -eq $method)[0]
             $actualArguments = @($declaration.Parameters.Name)

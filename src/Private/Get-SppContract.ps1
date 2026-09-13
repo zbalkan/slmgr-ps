@@ -17,10 +17,29 @@ function Get-SppContract
             'DiscoveredKeyManagementServiceMachinePort',
             'KeyManagementServiceLookupDomain',
             'VLActivationType',
-            'VLActivationTypeEnabled'
+            'VLActivationTypeEnabled',
+            'TokenActivationILID',
+            'TokenActivationILVID',
+            'TokenActivationGrantNumber',
+            'TokenActivationCertificateThumbprint',
+            'TokenActivationAdditionalInfo'
         )
         ServiceProperties = @(
-            'KeyManagementServiceHostCaching'
+            'KeyManagementServiceHostCaching',
+            'TokenActivationILID',
+            'TokenActivationILVID',
+            'TokenActivationGrantNumber',
+            'TokenActivationCertificateThumbprint',
+            'TokenActivationAdditionalInfo'
+        )
+        TokenActivationLicenseProperties = @(
+            'ID',
+            'ILID',
+            'ILVID',
+            'AuthorizationStatus',
+            'ExpirationDate',
+            'Description',
+            'AdditionalInfo'
         )
         Methods = @{
             Activate = @{
@@ -94,6 +113,10 @@ function Get-SppContract
             SetVLActivationTypeEnabled = @{
                 Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
                 Arguments = @('ActivationType')
+            }
+            Uninstall = @{
+                Classes   = @('SoftwareLicensingTokenActivationLicense')
+                Arguments = @()
             }
             UninstallProductKey = @{
                 Classes   = @('SoftwareLicensingProduct')
