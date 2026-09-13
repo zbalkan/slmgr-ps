@@ -60,6 +60,35 @@ Describe 'Invoke-SppCimMethod' {
         } -Times 1
     }
 
+    It 'forwards license content to the licensing service' {
+        $script:Service | Invoke-SppCimMethod -MethodName InstallLicense `
+            -Arguments @{ License = '<license />' }
+
+        Should -Invoke Invoke-CimMethod -ParameterFilter {
+            $MethodName -eq 'InstallLicense' -and
+            $Arguments.License -eq '<license />'
+        } -Times 1
+    }
+
+    It 'routes application rearm to the licensing service' {
+        $applicationId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        $script:Service | Invoke-SppCimMethod -MethodName ReArmApp `
+            -Arguments @{ ApplicationId = $applicationId }
+
+        Should -Invoke Invoke-CimMethod -ParameterFilter {
+            $MethodName -eq 'ReArmApp' -and
+            $Arguments.ApplicationId -eq $applicationId
+        } -Times 1
+    }
+
+    It 'routes SKU rearm to a licensing product' {
+        $script:Product | Invoke-SppCimMethod -MethodName ReArmSku
+
+        Should -Invoke Invoke-CimMethod -ParameterFilter {
+            $MethodName -eq 'ReArmSku'
+        } -Times 1
+    }
+
     It 'forwards both offline activation arguments' {
         $script:Product | Invoke-SppCimMethod -MethodName DepositOfflineConfirmationId -Arguments @{
             InstallationId = '123456789'
