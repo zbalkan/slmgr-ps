@@ -12,7 +12,7 @@
     RootModule        = 'slmgr-ps.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.3.0'
+    ModuleVersion     = '1.4.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -74,6 +74,7 @@
         'Install-WindowsLicense'
         'Repair-WindowsLicense'
         'Reset-WindowsActivation'
+        'Set-WindowsKmsClient'
         'Start-WindowsActivation'
     )
 
@@ -113,7 +114,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'Added .xrm-ms license-file installation for local and remote targets, local system-license repair from Windows token directories, application-level and SKU-level rearm, provider and input validation, deterministic file discovery, and batch-safe failure handling.'
+            ReleaseNotes = 'Completed KMS client endpoint, port, lookup-domain, reset, and host-caching controls; added activation-ID targeting, endpoint validation, extended KMS reporting, and corrected provider argument handling.'
 
             # External dependent modules of this module
             # ExternalModuleDependencies = ''

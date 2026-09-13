@@ -117,16 +117,31 @@ function Get-WindowsActivation
                     default { 'Get-BasicLicenseInformation' }
                 }
 
+                $service = $null
+                if ($PSCmdlet.ParameterSetName -eq 'Extended')
+                {
+                    $service = Get-CimInstance -CimSession $session `
+                        -ClassName SoftwareLicensingService -ErrorAction Stop
+                }
+
                 if ($products.Count -eq 0 -and -not $All.IsPresent)
                 {
-                    $result = & $informationFunction -CimSession $session -ErrorAction Stop
+                    $informationParameters = @{ CimSession = $session; ErrorAction = 'Stop' }
+                    if ($null -ne $service) { $informationParameters['Service'] = $service }
+                    $result = & $informationFunction @informationParameters
                     $results.Add($result)
                 }
                 else
                 {
                     foreach ($product in $products)
                     {
-                        $result = & $informationFunction -CimSession $session -Product $product -ErrorAction Stop
+                        $informationParameters = @{
+                            CimSession = $session
+                            Product     = $product
+                            ErrorAction = 'Stop'
+                        }
+                        if ($null -ne $service) { $informationParameters['Service'] = $service }
+                        $result = & $informationFunction @informationParameters
                         $results.Add($result)
                     }
                 }

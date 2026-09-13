@@ -10,6 +10,7 @@ Describe 'Public command state' {
             'Install-WindowsLicense'
             'Repair-WindowsLicense'
             'Reset-WindowsActivation'
+            'Set-WindowsKmsClient'
             'Start-WindowsActivation'
         )
         $actualCommands = @(Get-Command -Module slmgr-ps).Name

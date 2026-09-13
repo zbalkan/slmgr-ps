@@ -4,6 +4,15 @@ A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
 `slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially licensing status, online and offline activation, license installation and repair, rearm, product-key removal, product-key registry cleanup, and KMS client workflows.
 
+## Changes in 1.4.0
+
+- Added standalone KMS client endpoint, port, lookup-domain, and host-caching configuration.
+- Added service-wide and activation-ID-scoped KMS client settings where the SPP provider supports both scopes.
+- Added lookup-domain clearing without changing the existing host-and-port-only reset behavior.
+- Added hostname, FQDN, IPv4, bracketed IPv6, embedded-port, domain, and port validation before CIM sessions are opened.
+- Added configured and discovered KMS client state to extended activation output.
+- Corrected KMS host-caching calls to pass the provider's required `DisableCaching` argument.
+
 ## Changes in 1.3.0
 
 - Added `.xrm-ms` license-file installation for local and remote computers.
@@ -58,15 +67,16 @@ Microsoft now provides the official [OSLicense PowerShell module](https://learn.
 
 ## Current scope
 
-The module currently exports five public functions:
+The module currently exports six public functions:
 
 - `Get-WindowsActivation`
 - `Install-WindowsLicense`
 - `Repair-WindowsLicense`
+- `Set-WindowsKmsClient`
 - `Start-WindowsActivation`
 - `Reset-WindowsActivation`
 
-The current implementation is intentionally narrower than `slmgr.vbs`. It supports default, activation-ID, and all-product client queries, targeted client activation and reset operations, license installation, local system-license repair, and targeted rearm. It does not currently support token-based activation, Active Directory-based activation, or KMS host configuration.
+The current implementation is intentionally narrower than `slmgr.vbs`. It supports default, activation-ID, and all-product client queries, targeted client activation and reset operations, KMS client configuration, license installation, local system-license repair, and targeted rearm. It does not currently support token-based activation, Active Directory-based activation, or KMS server configuration.
 
 ## Installation
 
@@ -98,6 +108,8 @@ Get-WindowsActivation -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
 Get-WindowsActivation -All
 Get-WindowsActivation -Extended -All
 ```
+
+Extended output includes configured and discovered KMS host and port values, the KMS lookup domain, and the service-wide host-caching state when the provider exposes them.
 
 ### Work with remote computers
 
@@ -136,7 +148,10 @@ Start-WindowsActivation -Computer WS01
 Start-WindowsActivation -Computer WS01 -Credentials (Get-Credential)
 
 # Set a KMS server and port before activation
-Start-WindowsActivation -Computer WS01 -KMSServerFQDN kms.example.com -KMSServerPort 1688
+Start-WindowsActivation -Computer WS01 -KmsServer kms.example.com -KMSServerPort 1688
+
+# Bracket IPv6 when including it with a port
+Start-WindowsActivation -KmsServer '[2001:db8::10]:1688'
 
 # Disable KMS host caching before activation
 Start-WindowsActivation -Computer WS01 -CacheDisabled
@@ -145,6 +160,34 @@ Start-WindowsActivation -Computer WS01 -CacheDisabled
 `-UseKmsClientKey` installs a known KMS client setup key for the detected Windows edition. `-ProductKey` accepts an explicit key. Both forms then resolve the product registration matching the installed key and attempt activation because this module deliberately combines key installation and activation into one operation.
 
 Do not combine `-ActivationId` with `-ProductKey` or `-UseKmsClientKey`. Windows exposes key installation on `SoftwareLicensingService`, not on an individual licensing product, so that combination cannot safely guarantee that the requested activation ID receives the key. To target an activation ID, install no key in that invocation and use `-ActivationId` by itself.
+
+### Configure the KMS client
+
+```powershell
+# Configure a server and the default KMS port without activating
+Set-WindowsKmsClient -KmsServer kms01.example.test
+
+# Configure a server with an embedded port
+Set-WindowsKmsClient -KmsServer '192.0.2.10:2500'
+
+# Change only the configured port
+Set-WindowsKmsClient -Port 2500
+
+# Configure the DNS lookup domain
+Set-WindowsKmsClient -LookupDomain activation.example.test
+
+# Disable or enable service-wide KMS host caching
+Set-WindowsKmsClient -HostCaching Disabled
+Set-WindowsKmsClient -HostCaching Enabled
+
+# Configure an exact licensing product where the provider supports product scope
+Set-WindowsKmsClient -KmsServer kms01 -Port 2500 `
+    -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+```
+
+`-KmsServer` accepts a single-label hostname, FQDN, IPv4 address, or bracketed IPv6 address. A port can be embedded in the endpoint or supplied with `-Port`, but not both. Changing a server without specifying a port sets port 1688 so a stale custom port is not retained. `-HostCaching` is service-wide and therefore cannot be combined with `-ActivationId`.
+
+`Start-WindowsActivation -KmsServer ...` preserves the combined configuration-and-activation workflow. `-KMSServerFQDN` remains an accepted parameter name for compatibility.
 
 ### Offline activation
 
@@ -212,6 +255,12 @@ Reset-WindowsActivation -ClearKMSSettings
 # Clear product-specific KMS client settings
 Reset-WindowsActivation -ClearKMSSettings -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
 
+# Clear the KMS lookup domain without clearing the configured host and port
+Reset-WindowsActivation -ClearKMSLookupDomain
+
+# Clear a product-specific KMS lookup domain
+Reset-WindowsActivation -ClearKMSLookupDomain -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+
 # Combine operations
 Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry -ClearKMSSettings
 
@@ -219,7 +268,7 @@ Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry -Clear
 Reset-WindowsActivation -Computer WS01 -Credentials (Get-Credential) -UninstallProductKey -ClearProductKeyFromRegistry
 ```
 
-`-ClearKMSSettings` clears the configured KMS host name and port. It preserves a configured KMS lookup domain, matching the default `/ckms` behavior. With `-ActivationId`, it invokes the product-scoped KMS client methods.
+`-ClearKMSSettings` clears the configured KMS host name and port. It preserves a configured KMS lookup domain, matching `/ckms` behavior. Use `-ClearKMSLookupDomain` to clear the domain independently. With `-ActivationId`, either switch invokes the product-scoped KMS client methods.
 
 ## Comparison with slmgr.vbs
 
@@ -277,16 +326,17 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 | `slmgr.vbs` option                    | `slmgr-ps` equivalent                                                 |          Status | Notes                                                                                                                     |
 | ------------------------------------- | --------------------------------------------------------------------- | --------------: | ------------------------------------------------------------------------------------------------------------------------- |
-| `/skms <Name[:Port]>`                 | `Start-WindowsActivation -KMSServerFQDN <FQDN> -KMSServerPort <Port>` | Partial | FQDN and port are supported before activation. `:port`-only input and raw IPv6 forms are not supported. |
-| `/skms <Name[:Port]> <Activation ID>` | Add `-ActivationId <ActivationId>` to the command above                | Supported differently | Applies product-specific KMS client settings and then attempts activation.             |
-| `/skms-domain <FQDN>`                 | None                                                                  | Not implemented | KMS lookup-domain configuration is not currently supported.                                                               |
-| `/skms-domain <FQDN> <Activation ID>` | None                                                                  | Not implemented | Product-specific KMS lookup-domain configuration is not currently supported.                                              |
+| `/skms <Name[:Port]>`                 | `Set-WindowsKmsClient -KmsServer <Name[:Port]>`                        | Supported | Accepts hostnames, FQDNs, IPv4, and bracketed IPv6. Use `-Port` alone for the `:Port` form.                                |
+| `/skms <Name[:Port]> <Activation ID>` | Add `-ActivationId <ActivationId>` to the command above                | Supported | Applies the endpoint to the exact licensing product. `Start-WindowsActivation` can configure and activate in one call.    |
+| `/skms-domain <FQDN>`                 | `Set-WindowsKmsClient -LookupDomain <FQDN>`                            | Supported | Configures the service-wide KMS DNS lookup domain.                                                                         |
+| `/skms-domain <FQDN> <Activation ID>` | Add `-ActivationId <ActivationId>` to the command above                | Supported | Configures the lookup domain on the exact licensing product.                                                               |
 | `/ckms`                               | `Reset-WindowsActivation -ClearKMSSettings`                           |       Supported | Clears the configured KMS host name and port while preserving the KMS lookup domain.                                      |
 | `/ckms <Activation ID>`               | `Reset-WindowsActivation -ClearKMSSettings -ActivationId <ActivationId>` | Supported | Clears product-specific KMS client host and port settings.                         |
-| `/skhc`                               | None                                                                  | Not implemented | KMS host caching is enabled by default in Windows. Explicit enable support is not currently exposed.                      |
-| `/ckhc`                               | `Start-WindowsActivation -CacheDisabled`                              |         Partial | Disables KMS host caching as part of the activation workflow. Standalone cache-control is not currently exposed.          |
+| `/ckms-domain`                        | `Reset-WindowsActivation -ClearKMSLookupDomain`                       | Supported | Clears the lookup domain without clearing the configured host and port.                                                   |
+| `/skhc`                               | `Set-WindowsKmsClient -HostCaching Enabled`                           | Supported | Enables service-wide KMS host caching.                                                                                     |
+| `/ckhc`                               | `Set-WindowsKmsClient -HostCaching Disabled`                          | Supported | Disables service-wide KMS host caching. `Start-WindowsActivation -CacheDisabled` remains available for combined use.       |
 
-### KMS host configuration options
+### KMS server configuration options
 
 | `slmgr.vbs` option                       | `slmgr-ps` equivalent |          Status | Notes                                                                             |
 | ---------------------------------------- | --------------------- | --------------: | --------------------------------------------------------------------------------- |
@@ -345,8 +395,7 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 The following areas are intentionally not presented as supported yet:
 
-- KMS lookup-domain configuration.
-- KMS host configuration.
+- KMS server configuration, including listening port, DNS publishing, intervals, and process priority.
 - Remote system-license repair; `Repair-WindowsLicense` is local-only by design.
 - Token-based activation.
 - Active Directory-based activation.
@@ -370,6 +419,7 @@ Use `-Verbose` for operational detail:
 Get-WindowsActivation -Verbose
 Install-WindowsLicense -Path C:\Licenses\example.xrm-ms -Verbose
 Repair-WindowsLicense -Verbose
+Set-WindowsKmsClient -KmsServer kms01.example.test -Verbose
 Start-WindowsActivation -Verbose
 Reset-WindowsActivation -Verbose -ClearKMSSettings
 ```
@@ -388,9 +438,7 @@ The long-term goal is to cover more of the practical `slmgr.vbs` workflow surfac
 
 Useful contribution areas include:
 
-- Adding KMS lookup-domain support.
-- Adding standalone KMS cache enable/disable commands.
-- Adding KMS host configuration workflows.
+- Adding KMS server configuration workflows after the client capability path is complete.
 - Adding tests for CIM provider compatibility across supported Windows versions.
 - Improving documentation and examples.
 

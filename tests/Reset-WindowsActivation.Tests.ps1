@@ -107,6 +107,35 @@ Describe 'Reset-WindowsActivation' {
             Reset-WindowsActivation -ClearKMSSettings -Confirm:$false
             Should -Invoke Get-WindowsLicensingProduct -Times 0
         }
+
+        It 'Does not clear the KMS lookup domain' {
+            Reset-WindowsActivation -ClearKMSSettings -Confirm:$false
+            Should -Invoke Invoke-SppCimMethod -ParameterFilter {
+                $MethodName -eq 'ClearKeyManagementServiceLookupDomain'
+            } -Times 0
+        }
+    }
+
+    Context 'ClearKMSLookupDomain' {
+        BeforeEach {
+            Mock Get-Session { $script:MockCimSession }
+            Mock Remove-CimSession {}
+            Mock Get-WindowsLicensingProduct {}
+            Mock Get-CimInstance { [PSCustomObject]@{ ClassName = 'SoftwareLicensingService' } }
+            Mock Invoke-SppCimMethod {}
+        }
+
+        It 'clears the lookup domain without clearing the host or port' {
+            Reset-WindowsActivation -ClearKMSLookupDomain -Confirm:$false
+
+            Should -Invoke Invoke-SppCimMethod -ParameterFilter {
+                $MethodName -eq 'ClearKeyManagementServiceLookupDomain'
+            } -Times 1
+            Should -Invoke Invoke-SppCimMethod -ParameterFilter {
+                $MethodName -eq 'ClearKeyManagementServiceMachine' -or
+                $MethodName -eq 'ClearKeyManagementServicePort'
+            } -Times 0
+        }
     }
 
     Context 'Combined switches' {
@@ -122,9 +151,10 @@ Describe 'Reset-WindowsActivation' {
             Mock Invoke-SppCimMethod {}
         }
 
-        It 'Calls all four methods when all switches are specified' {
-            Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry -ClearKMSSettings -Confirm:$false
-            Should -Invoke Invoke-SppCimMethod -Times 4
+        It 'Calls all five methods when all switches are specified' {
+            Reset-WindowsActivation -UninstallProductKey -ClearProductKeyFromRegistry `
+                -ClearKMSSettings -ClearKMSLookupDomain -Confirm:$false
+            Should -Invoke Invoke-SppCimMethod -Times 5
         }
     }
 
@@ -202,10 +232,21 @@ Describe 'Reset-WindowsActivation' {
             }
         }
 
+        It 'clears the lookup domain from the requested product without querying the service' {
+            Reset-WindowsActivation -ClearKMSLookupDomain `
+                -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false
+
+            Should -Invoke Get-CimInstance -Times 0
+            Should -Invoke Invoke-SppCimMethod -Times 1 -ParameterFilter {
+                $MethodName -eq 'ClearKeyManagementServiceLookupDomain' -and
+                $InputObject -eq $script:Product
+            }
+        }
+
         It 'rejects an activation ID used only with service-wide registry clearing' {
             { Reset-WindowsActivation -ClearProductKeyFromRegistry `
                     -ActivationId 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' -Confirm:$false } |
-                Should -Throw -ExpectedMessage '*requires UninstallProductKey or ClearKMSSettings*'
+                Should -Throw -ExpectedMessage '*requires UninstallProductKey, ClearKMSSettings, or ClearKMSLookupDomain*'
 
             Should -Invoke Get-Session -Times 0
         }
