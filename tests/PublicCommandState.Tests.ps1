@@ -5,7 +5,20 @@ BeforeAll {
 Describe 'Public command state' {
     It 'does not require elevation to import the module' {
         Get-Module slmgr-ps | Should -Not -BeNullOrEmpty
-        Get-Command Get-WindowsActivation -Module slmgr-ps | Should -Not -BeNullOrEmpty
+        $expectedCommands = @(
+            'Get-WindowsActivation'
+            'Install-WindowsLicense'
+            'Repair-WindowsLicense'
+            'Reset-WindowsActivation'
+            'Start-WindowsActivation'
+        )
+        $actualCommands = @(Get-Command -Module slmgr-ps).Name
+
+        $actualCommands.Count | Should -Be $expectedCommands.Count
+        foreach ($command in $expectedCommands)
+        {
+            $actualCommands | Should -Contain $command
+        }
     }
 
     It 'does not place administrator requirements on public script files' {
