@@ -59,7 +59,7 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
             }
             $declaration = @($class.CimClassMethods | Where-Object Name -eq $method)[0]
             $actualArguments = @($declaration.Parameters | Where-Object {
-                    $inQualifier = $_.Qualifiers['In']
+                    $inQualifier = @($_.Qualifiers | Where-Object Name -eq 'In')[0]
                     $null -ne $inQualifier -and $inQualifier.Value
                 } | ForEach-Object Name)
             $actualArguments.Count | Should -Be $expectedArguments.Count
@@ -74,6 +74,8 @@ Describe 'Windows SPP CIM contract' -Skip:(-not $IsWindows -and $PSVersionTable.
         $method = @($script:ServiceClass.CimClassMethods | Where-Object Name -eq 'GenerateActiveDirectoryOfflineActivationId')[0]
         $output = @($method.Parameters | Where-Object Name -eq 'InstallationID')[0]
         $output | Should -Not -BeNullOrEmpty
-        $output.Qualifiers['Out'].Value | Should -BeTrue
+        $outQualifier = @($output.Qualifiers | Where-Object Name -eq 'Out')[0]
+        $outQualifier | Should -Not -BeNullOrEmpty
+        $outQualifier.Value | Should -BeTrue
     }
 }
