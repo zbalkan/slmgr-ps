@@ -2,7 +2,16 @@
 
 A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
-`slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially KMS activation, basic licensing status, offline activation, rearm, product-key removal, product-key registry cleanup, and KMS client reset workflows.
+`slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially licensing status, online and offline activation, license installation and repair, rearm, product-key removal, product-key registry cleanup, and KMS client workflows.
+
+## Changes in 1.3.0
+
+- Added `.xrm-ms` license-file installation for local and remote computers.
+- Added local system-license repair from the Windows OEM and SPP token directories.
+- Added application-level and SKU-level rearm with exact GUID targeting.
+- Added file, identifier, provider-contract, and pre-session validation for the new operations.
+- Added per-file and per-computer failure containment with final terminating errors.
+- Added tests for routing, cleanup, `ShouldProcess`, partial failure, and public exports.
 
 ## Changes in 1.2.0
 
@@ -45,15 +54,19 @@ The original version was a small PowerShell script based on `slmgr.vbs`. You can
 
 This repository turns that script into a PowerShell module so it can be installed and used more easily. You can find it in the [PowerShell Gallery](https://www.powershellgallery.com/packages/slmgr-ps).
 
+Microsoft now provides the official [OSLicense PowerShell module](https://learn.microsoft.com/en-gb/powershell/module/oslicense/?view=windowsserver2025-ps). `slmgr-ps` remains an independent community alternative: it uses the Windows Software Protection Platform CIM interfaces directly and does not import, call, wrap, or depend on OSLicense components.
+
 ## Current scope
 
-The module currently exports three public functions:
+The module currently exports five public functions:
 
 - `Get-WindowsActivation`
+- `Install-WindowsLicense`
+- `Repair-WindowsLicense`
 - `Start-WindowsActivation`
 - `Reset-WindowsActivation`
 
-The current implementation is intentionally narrower than `slmgr.vbs`. It supports default, activation-ID, and all-product client queries, plus targeted client activation and reset operations. It does not currently support token-based activation, Active Directory-based activation, license repair, or KMS host configuration.
+The current implementation is intentionally narrower than `slmgr.vbs`. It supports default, activation-ID, and all-product client queries, targeted client activation and reset operations, license installation, local system-license repair, and targeted rearm. It does not currently support token-based activation, Active Directory-based activation, or KMS host configuration.
 
 ## Installation
 
@@ -151,10 +164,35 @@ The confirmation ID may contain dashes or spaces. The module normalizes it befor
 ### Rearm
 
 ```powershell
+# Rearm Windows when the current state is eligible
 Start-WindowsActivation -Rearm
+
+# Rearm one application by application ID
+Start-WindowsActivation -Rearm -ApplicationId 11111111-2222-3333-4444-555555555555
+
+# Rearm one licensing product by activation ID
+Start-WindowsActivation -Rearm -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
 ```
 
-Rearm is a material licensing operation. Run it only when you understand the activation state and the effect on the target system.
+`-ApplicationId` and `-ActivationId` are mutually exclusive and require `-Rearm`. Rearm is a material licensing operation and normally requires a restart before the change takes effect. Run it only when you understand the activation state and the effect on the target system.
+
+### Install and repair licenses
+
+```powershell
+# Install one license file on the local computer
+Install-WindowsLicense -Path C:\Licenses\example.xrm-ms
+
+# Install multiple license files on multiple computers
+Install-WindowsLicense -Computer WS01, WS02 -Credentials (Get-Credential) `
+    -Path C:\Licenses\base.xrm-ms, C:\Licenses\edition.xrm-ms
+
+# Reinstall licenses from this computer's Windows OEM and SPP token directories
+Repair-WindowsLicense
+```
+
+`Install-WindowsLicense` resolves and reads the supplied files on the computer running PowerShell, then sends their contents through CIM to each target. It accepts `.xrm-ms` files only, rejects empty and duplicate paths, attempts every validated file and computer, refreshes licensing after successful installations, and terminates with an error if any operation failed.
+
+`Repair-WindowsLicense` is intentionally local-only. It reads the license files from the current Windows installation so licenses from the management computer cannot accidentally be applied to a remote target. It skips filesystem reparse points, processes files in deterministic order, continues past individual failures, and refreshes licensing when at least one file was reinstalled.
 
 ### Reset activation-related settings
 
@@ -223,11 +261,11 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 | `slmgr.vbs` option                       | `slmgr-ps` equivalent                                                |          Status | Notes                                                                                 |
 | ---------------------------------------- | -------------------------------------------------------------------- | --------------: | ------------------------------------------------------------------------------------- |
 | `/cpky`                                  | `Reset-WindowsActivation -ClearProductKeyFromRegistry`               |       Supported | Clears the product key from registry storage through `SoftwareLicensingService`.      |
-| `/ilc <license_file>`                    | None                                                                 | Not implemented | License-file installation is not currently supported.                                 |
-| `/rilc`                                  | None                                                                 | Not implemented | License reinstallation from system token folders is not currently supported.          |
+| `/ilc <license_file>`                    | `Install-WindowsLicense -Path <license_file>`                         | Supported differently | Reads the controller-side `.xrm-ms` file and installs its content through CIM.         |
+| `/rilc`                                  | `Repair-WindowsLicense`                                               | Supported locally | Reinstalls `.xrm-ms` files from the local Windows OEM and SPP token directories.       |
 | `/rearm`                                 | `Start-WindowsActivation -Rearm`                                     |       Supported | Resets activation state where supported by Windows.                                   |
-| `/rearm-app <Application ID>`            | None                                                                 | Not implemented | Application-level rearm is not currently supported.                                   |
-| `/rearm-sku <Activation ID>`             | None                                                                 | Not implemented | SKU-level rearm is not currently supported.                                           |
+| `/rearm-app <Application ID>`            | `Start-WindowsActivation -Rearm -ApplicationId <ApplicationId>`       |       Supported | Rearms the exact application through `SoftwareLicensingService`.                       |
+| `/rearm-sku <Activation ID>`             | `Start-WindowsActivation -Rearm -ActivationId <ActivationId>`         |       Supported | Resolves and rearms the exact licensing product.                                       |
 | `/upk`                                   | `Reset-WindowsActivation -UninstallProductKey`                       |       Supported | Uninstalls the product key from the selected Windows licensing product.               |
 | `/upk <Activation ID>`                   | `Reset-WindowsActivation -UninstallProductKey -ActivationId <ActivationId>` | Supported | Uninstalls the key from the exact SPP product.                          |
 | `/dti`                                   | `Get-WindowsActivation -Offline`                                     |       Supported | Returns the offline installation ID for the selected Windows licensing product.       |
@@ -299,6 +337,8 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 - It supports PowerShell pipeline-friendly usage.
 - It includes KMS client setup keys for supported Windows editions.
 - It combines explicit product-key installation and activation in one command.
+- It installs license files on multiple targets from controller-side paths.
+- It keeps system-license repair local to prevent cross-machine license-file use.
 - It works without Windows Script Host, so environments that block `cscript.exe` and `wscript.exe` can still perform supported activation workflows.
 
 ## Current limitations
@@ -307,7 +347,7 @@ The following areas are intentionally not presented as supported yet:
 
 - KMS lookup-domain configuration.
 - KMS host configuration.
-- License-file installation and license repair.
+- Remote system-license repair; `Repair-WindowsLicense` is local-only by design.
 - Token-based activation.
 - Active Directory-based activation.
 - `slmgr.vbs` command-line syntax compatibility.
@@ -318,7 +358,7 @@ Avoid passing secrets directly on the command line. `slmgr.vbs` supports a comma
 
 An explicit `-ProductKey` remains plain command-line input and may be retained in PowerShell history. Protect shell history and automation logs, and avoid recording the full invocation in shared diagnostics.
 
-For calls containing multiple computers, activation and reset commands attempt every computer before reporting the collected failures. The command still ends with a terminating error when any target fails, so automation must treat the invocation as failed even when later computers succeeded.
+For calls containing multiple computers or license files, mutating commands attempt every applicable item before reporting collected failures. The command still ends with a terminating error when any target or file fails, so automation must treat the invocation as failed even when later operations succeeded.
 
 For remote execution, prefer properly configured WinRM. Where appropriate, use HTTPS for WinRM. See Microsoft documentation on [WinRM security](https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/winrm-security).
 
@@ -328,6 +368,8 @@ Use `-Verbose` for operational detail:
 
 ```powershell
 Get-WindowsActivation -Verbose
+Install-WindowsLicense -Path C:\Licenses\example.xrm-ms -Verbose
+Repair-WindowsLicense -Verbose
 Start-WindowsActivation -Verbose
 Reset-WindowsActivation -Verbose -ClearKMSSettings
 ```
@@ -346,15 +388,10 @@ The long-term goal is to cover more of the practical `slmgr.vbs` workflow surfac
 
 Useful contribution areas include:
 
-- Adding arbitrary product-key installation with safe handling.
-- Adding activation-ID selectors.
-- Adding `all` product enumeration.
-- Adding activation-ID-specific KMS settings reset.
 - Adding KMS lookup-domain support.
 - Adding standalone KMS cache enable/disable commands.
 - Adding KMS host configuration workflows.
-- Adding license installation and repair workflows.
-- Adding tests for WMI/CIM method compatibility across supported Windows versions.
+- Adding tests for CIM provider compatibility across supported Windows versions.
 - Improving documentation and examples.
 
 Please refer to [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidance.

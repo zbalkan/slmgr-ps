@@ -12,7 +12,7 @@
     RootModule        = 'slmgr-ps.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.2.0'
+    ModuleVersion     = '1.3.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -30,7 +30,7 @@
     Copyright         = '(c) Zafer Balkan. All rights reserved.'
 
     # Description of the functionality provided by this module
-    Description       = 'A PowerShell replacement for slmgr.vbs script'
+    Description       = 'An independent community PowerShell alternative for common slmgr.vbs workflows'
 
     # Minimum version of the Windows PowerShell engine required by this module
     # PowerShellVersion = ''
@@ -113,7 +113,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'Added explicit product-key installation with deterministic product selection and activation verification, activation-ID targeting across client queries and mutations, all-product information views, product-specific KMS client settings, input validation, and batch-safe activation and reset error handling.'
+            ReleaseNotes = 'Added .xrm-ms license-file installation for local and remote targets, local system-license repair from Windows token directories, application-level and SKU-level rearm, provider and input validation, deterministic file discovery, and batch-safe failure handling.'
 
             # External dependent modules of this module
             # ExternalModuleDependencies = ''

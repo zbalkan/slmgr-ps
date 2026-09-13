@@ -30,6 +30,10 @@ Start-WindowsActivation -Computer WS01 -KMSServerFQDN server.domain.net -KMSServ
 .EXAMPLE
 Start-WindowsActivation -ReArm # ReArm the trial period (guard clauses apply but cannot guarantee 100% safety)
 .EXAMPLE
+Start-WindowsActivation -ReArm -ApplicationId 11111111-2222-3333-4444-555555555555 # ReArm one application
+.EXAMPLE
+Start-WindowsActivation -ReArm -ActivationId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee # ReArm one licensing product
+.EXAMPLE
 Start-WindowsActivation -Offline -ConfirmationID 123456-123456-123456-123456-123456-123456-123456-123456-123456 # Phone activation
 .LINK
 https://github.com/zbalkan/slmgr-ps
