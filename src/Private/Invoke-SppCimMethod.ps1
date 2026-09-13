@@ -47,7 +47,7 @@ function Invoke-SppCimMethod
         {
             $returnValue = [uint32]$result.ReturnValue
             $errorCode = '0x{0:X8}' -f $returnValue
-            $message = "$MethodName failed with provider return value $returnValue ($errorCode)."
+            $message = "${MethodName}: licensing operation failed (return value: $returnValue, error code: $errorCode)"
             $exception = [System.InvalidOperationException]::new($message)
             $exception.Data['ProviderReturnValue'] = $returnValue
             $exception.Data['ErrorCode'] = $errorCode
