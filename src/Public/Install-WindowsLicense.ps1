@@ -11,7 +11,8 @@ validation at runtime.
 .INPUTS
 String[]. You can pass computer names through the pipeline.
 .OUTPUTS
-None if successful. Throws after processing all targets when any operation fails.
+slmgr-ps.LicensingOperationResult. One result is emitted for each attempted computer.
+Throws one aggregate error after processing all targets when any operation fails.
 .EXAMPLE
 Install-WindowsLicense -Path C:\Licenses\example.xrm-ms
 .EXAMPLE
@@ -21,6 +22,7 @@ https://github.com/zbalkan/slmgr-ps
 #>
 function Install-WindowsLicense
 {
+    [OutputType([PSCustomObject])]
     [CmdletBinding(SupportsShouldProcess = $true,
         PositionalBinding = $false,
         ConfirmImpact = 'High')]
@@ -56,6 +58,7 @@ function Install-WindowsLicense
             }
 
             $session = $null
+            $targetFailures = [System.Collections.Generic.List[System.Management.Automation.ErrorRecord]]::new()
             try
             {
                 $session = Get-Session -Computer $targetComputer -Credentials $Credentials -ErrorAction Stop
@@ -79,7 +82,7 @@ function Install-WindowsLicense
                             'WindowsLicenseInstallFailed',
                             [System.Management.Automation.ErrorCategory]::InvalidOperation,
                             $target)
-                        $installFailures.Add($errorRecord)
+                        $targetFailures.Add($errorRecord)
                     }
                 }
 
@@ -98,7 +101,7 @@ function Install-WindowsLicense
                             'WindowsLicenseRefreshFailed',
                             [System.Management.Automation.ErrorCategory]::InvalidOperation,
                             $targetComputer)
-                        $installFailures.Add($errorRecord)
+                        $targetFailures.Add($errorRecord)
                     }
                 }
             }
@@ -111,7 +114,7 @@ function Install-WindowsLicense
                     'WindowsLicenseTargetFailed',
                     [System.Management.Automation.ErrorCategory]::ConnectionError,
                     $targetComputer)
-                $installFailures.Add($errorRecord)
+                $targetFailures.Add($errorRecord)
             }
             finally
             {
@@ -120,17 +123,39 @@ function Install-WindowsLicense
                     Remove-CimSession -CimSession $session -ErrorAction Ignore | Out-Null
                 }
             }
+
+            if ($targetFailures.Count -eq 0)
+            {
+                New-LicensingOperationResult `
+                    -ComputerName $targetComputer `
+                    -Operation InstallLicense `
+                    -Success $true `
+                    -VerificationState ProviderAccepted
+            }
+            else
+            {
+                $innerExceptions = [System.Collections.Generic.List[System.Exception]]::new()
+                foreach ($failure in $targetFailures) { $innerExceptions.Add($failure.Exception) }
+                $targetException = [System.AggregateException]::new(
+                    "$($targetFailures.Count) license installation failure(s) on '$targetComputer'. First failure: $($targetFailures[0].Exception.Message)",
+                    $innerExceptions.ToArray())
+                $targetException.Data['Failures'] = $targetFailures.ToArray()
+                $targetError = [System.Management.Automation.ErrorRecord]::new(
+                    $targetException,
+                    'WindowsLicenseTargetFailed',
+                    [System.Management.Automation.ErrorCategory]::InvalidOperation,
+                    $targetComputer)
+                $structured = New-LicensingOperationError `
+                    -ErrorRecord $targetError `
+                    -ComputerName $targetComputer `
+                    -Operation InstallLicense
+                $installFailures.Add($structured.ErrorRecord)
+                Write-Output $structured.Result
+            }
         }
     }
     end
     {
-        if ($installFailures.Count -gt 0)
-        {
-            foreach ($failure in $installFailures)
-            {
-                Write-Error -ErrorRecord $failure
-            }
-            $PSCmdlet.ThrowTerminatingError($installFailures[0])
-        }
+        Complete-LicensingOperationBatch -Failures $installFailures
     }
 }
