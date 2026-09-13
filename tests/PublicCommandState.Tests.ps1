@@ -7,8 +7,12 @@ Describe 'Public command state' {
         Get-Module slmgr-ps | Should -Not -BeNullOrEmpty
         $expectedCommands = @(
             'Get-WindowsActivation'
+            'Get-WindowsADActivationInstallationId'
+            'Get-WindowsADActivationObject'
             'Get-WindowsTokenActivationLicense'
             'Install-WindowsLicense'
+            'New-WindowsADActivationObject'
+            'Remove-WindowsADActivationObject'
             'Remove-WindowsTokenActivationLicense'
             'Repair-WindowsLicense'
             'Reset-WindowsActivation'
