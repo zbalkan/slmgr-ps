@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-09-13
+
+### Added
+
+* Added regression coverage that pins the established 1.x public command and parameter names.
+* Added documentation for the tested support matrix and the distinction between CI coverage and manual or lab-only validation.
+* Added an explicit comparison of the project relationship to Microsoft's `OSLicense` module.
+
+### Changed
+
+* Continued stabilization on the 1.9.x line instead of publishing the planned public-contract cleanup as 2.0.0.
+* Deferred breaking command, parameter-set, output, and error-contract cleanup until a later manually reviewed 2.0.0 release.
+* Clarified that `slmgr-ps` remains an independent community implementation with no `OSLicense` runtime dependency.
+
 ## [1.9.0] - 2026-09-13
 
 ### Added

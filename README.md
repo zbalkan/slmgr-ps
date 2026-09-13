@@ -46,11 +46,37 @@ The module currently exports fifteen public functions:
 
 The implementation supports default, activation-ID, and all-product client queries; targeted client activation and reset operations; KMS client and host configuration; activation-type policy; license installation; local system-license repair; targeted rearm; token issuance-license listing and removal; and documented Active Directory activation-object workflows. Token certificate/PIN activation remains outside the supported surface.
 
+## 1.9.x stability policy
+
+The 1.9.x line is a stabilization line. Version 1.9.1 does not perform the breaking public-contract cleanup that had previously been planned for 2.0.0. Existing 1.x command names and established parameter names are pinned by regression tests so compatibility fixes and documentation work can continue without silently changing automation contracts.
+
+A future 2.0.0 remains reserved for a deliberate, manually reviewed contract pass. That work may include removing obsolete aliases, resolving ambiguous parameter sets, normalizing output and error contracts, and standardizing parameter naming. Those changes are intentionally deferred rather than being introduced under a patch version.
+
 ## Installation
 
 ```powershell
 Install-Module slmgr-ps
 ```
+
+## Validation and support matrix
+
+The table below distinguishes automated verification from capabilities that still require environment-specific integration testing. Passing CI does not by itself establish support for every Windows release or every licensing topology.
+
+| Area | Current validation |
+| --- | --- |
+| Windows PowerShell 5.1 | Pester runs in CI on `windows-latest`. |
+| PowerShell 7 | Pester runs in CI using the current PowerShell 7 available on `windows-latest`. Older PowerShell 7 baselines are not separately matrix-tested. |
+| Module manifest and exports | Validated in CI, including the fifteen exported public commands. |
+| Public 1.x parameter names | Pinned by `PublicContractStability.Tests.ps1` to detect accidental breaking drift. |
+| SPP provider contracts | Live CIM class, property, method, and argument checks run where the GitHub Windows runner exposes the relevant provider surface. Optional provider fields are not treated as universally available. |
+| Local CIM/DCOM workflows | Covered by unit/provider tests, but not claimed as exhaustively validated across every Windows client and Server generation. |
+| Remote WinRM and explicit credentials | Implemented and unit-tested; real multi-host validation remains environment-specific. |
+| KMS client operations | Covered by unit and provider-contract tests. |
+| KMS host operations | Covered by unit and provider-contract tests; destructive mutation still requires an isolated real KMS-host lab for integration validation. |
+| Token issuance licenses | Listing and exact ILID/ILVID removal are covered by provider-contract and unit tests. Certificate/PIN activation remains unsupported. |
+| Active Directory activation | Provider and dependency paths are tested; forest publication, privilege failures, duplicate handling, and deletion require an AD integration environment. |
+
+No Windows version outside an actually exercised environment should be inferred to be fully validated merely because its SPP provider exposes similarly named CIM members.
 
 ## Basic usage
 
@@ -191,7 +217,7 @@ Set-WindowsKmsHost -ListeningPort 1688 `
     -Priority Normal
 ```
 
-`Get-WindowsKmsHost` requires the target to report itself as an enabled KMS host. It returns the current listening port, DNS-publishing and priority state, activation and renewal intervals, KMS client counts, KMS product-key ID, activation-disabled state, and documented request counters. A cleared listening-port override is reported separately from the effective default port 1688. Current interval values are reported alongside the documented defaults of 120 minutes for activation and 10,080 minutes for renewal because SPP does not expose a separate “configured override” flag for those interval properties.
+`Get-WindowsKmsHost` requires the target to report itself as an enabled KMS host. It returns the current listening port, DNS-publishing and priority state, activation and renewal intervals, KMS client counts, KMS product-key ID, activation-disabled state when that optional provider property exists, and documented request counters. A cleared listening-port override is reported separately from the effective default port 1688. Current interval values are reported alongside the documented defaults of 120 minutes for activation and 10,080 minutes for renewal because SPP does not expose a separate “configured override” flag for those interval properties.
 
 `Set-WindowsKmsHost` validates host capability before invoking any host-only method. Listening ports must be between 1 and 65535; activation and renewal intervals must be between 15 and 43,200 minutes. Each requested setting is applied in deterministic order and re-read from `SoftwareLicensingService`; successful settings return `Verified`. Combined settings are not transactional, so a later failure does not roll back earlier successful changes. The final aggregate error preserves those partial-completion results.
 
@@ -434,11 +460,11 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 
 ### Volume activation policy
 
-| `slmgr.vbs` option                       | `slmgr-ps` equivalent                                                       |                Status | Notes                                                                 |
-| ---------------------------------------- | --------------------------------------------------------------------------- | --------------------: | --------------------------------------------------------------------- |
-| `/act-type`                              | `Set-WindowsActivationType -ActivationType Any`                             | Supported differently | Clears the activation-type restriction.                               |
+| `slmgr.vbs` option                       | `slmgr-ps` equivalent                                                          |                Status | Notes                                                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------ | --------------------: | --------------------------------------------------------------------- |
+| `/act-type`                              | `Set-WindowsActivationType -ActivationType Any`                                | Supported differently | Clears the activation-type restriction.                               |
 | `/act-type <0\|1\|2\|3>`                 | `Set-WindowsActivationType -ActivationType <Any\|ActiveDirectory\|Kms\|Token>` | Supported differently | Uses readable PowerShell values instead of numeric policy values.     |
-| `/act-type <0\|1\|2\|3> <Activation ID>` | Add `-ActivationId <ActivationId>`                                          | Supported differently | Applies the policy to the exact licensing product.                    |
+| `/act-type <0\|1\|2\|3> <Activation ID>` | Add `-ActivationId <ActivationId>`                                             | Supported differently | Applies the policy to the exact licensing product.                    |
 
 ### KMS server configuration options
 
@@ -446,7 +472,7 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 | ------------------ | ---------------------------------------------------------- | --------------------: | ---------------------------------------------------------------------------------------------- |
 | `/sai <Interval>`  | `Set-WindowsKmsHost -ActivationInterval <Interval>`        |             Supported | Accepts the documented 15–43,200 minute range.                                                 |
 | `/sri <Interval>`  | `Set-WindowsKmsHost -RenewalInterval <Interval>`           |             Supported | Accepts the documented 15–43,200 minute range.                                                 |
-| `/sprt <Port>`     | `Set-WindowsKmsHost -ListeningPort <Port>`                 |             Supported | Configures the host listening port; the documented default is 1688.                             |
+| `/sprt <Port>`     | `Set-WindowsKmsHost -ListeningPort <Port>`                 |             Supported | Configures the host listening port; the documented default is 1688.                            |
 | `/sdns`            | `Set-WindowsKmsHost -DnsPublishing Enabled`                | Supported differently | Uses an explicit readable state instead of opposing switches.                                  |
 | `/cdns`            | `Set-WindowsKmsHost -DnsPublishing Disabled`               | Supported differently | Uses an explicit readable state instead of opposing switches.                                  |
 | `/spri`            | `Set-WindowsKmsHost -Priority Normal`                      | Supported differently | Uses an explicit readable state instead of opposing switches.                                  |
@@ -457,25 +483,39 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 | `slmgr.vbs` option                    | `slmgr-ps` equivalent                                                     |                Status | Notes                                                                        |
 | ------------------------------------- | ------------------------------------------------------------------------- | --------------------: | ---------------------------------------------------------------------------- |
 | `/lil`                                | `Get-WindowsTokenActivationLicense`                                       |             Supported | Returns installed token activation issuance licenses as structured objects.  |
-| `/ril <ILID> <ILvID>`                 | `Remove-WindowsTokenActivationLicense -ILID <ILID> -ILVID <ILVID>`        |             Supported | Requires the exact issuance-license identity and verifies removal.            |
+| `/ril <ILID> <ILvID>`                 | `Remove-WindowsTokenActivationLicense -ILID <ILID> -ILVID <ILVID>`        |             Supported | Requires the exact issuance-license identity and verifies removal.           |
 | `/ltc`                                | None                                                                      | Not implemented       | Token activation certificate listing is not currently supported.             |
-| `/fta <Certificate Thumbprint>`       | None                                                                      | Not implemented       | Certificate-driven token activation is not currently supported.               |
+| `/fta <Certificate Thumbprint>`       | None                                                                      | Not implemented       | Certificate-driven token activation is not currently supported.              |
 | `/fta <Certificate Thumbprint> <PIN>` | None                                                                      | Not implemented       | PIN-assisted token activation is not implemented through undocumented paths. |
-| `/stao`                               | `Set-WindowsActivationType -ActivationType Token`                         | Supported differently | Uses the modern activation-type policy interface.                             |
-| `/ctao`                               | `Set-WindowsActivationType -ActivationType Any`                           | Supported differently | Clears the activation-type restriction.                                       |
+| `/stao`                               | `Set-WindowsActivationType -ActivationType Token`                         | Supported differently | Uses the modern activation-type policy interface.                            |
+| `/ctao`                               | `Set-WindowsActivationType -ActivationType Any`                           | Supported differently | Clears the activation-type restriction.                                      |
 
 ### Active Directory-based activation options
 
-| `slmgr.vbs` option                                                                  | `slmgr-ps` equivalent                                                                                                  |                Status | Notes                                                                                                      |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------: | ---------------------------------------------------------------------------------------------------------- |
-| `/ad-activation-online <Product Key>`                                               | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                                  | Supported differently | `slmgr-ps` requires an explicit object name so duplicate detection and post-create verification are exact. |
-| `/ad-activation-online <Product Key> <Activation Object name>`                      | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                                  |             Supported | Creates and verifies the named activation object.                                                          |
-| `/ad-activation-get-iid <Product Key>`                                              | `Get-WindowsADActivationInstallationId -ProductKey <ProductKey>`                                                       |             Supported | Returns structured installation-ID output for a resumable offline workflow.                               |
-| `/ad-activation-apply-cid <Product Key> <Confirmation ID>`                          | `New-WindowsADActivationObject -ProductKey <ProductKey> -ConfirmationId <ConfirmationId> -ActivationObjectName <Name>` | Supported differently | `slmgr-ps` requires an explicit object name.                                                               |
-| `/ad-activation-apply-cid <Product Key> <Confirmation ID> <Activation Object name>` | `New-WindowsADActivationObject -ProductKey <ProductKey> -ConfirmationId <ConfirmationId> -ActivationObjectName <Name>` |             Supported | Deposits the confirmation ID and verifies the named object.                                               |
-| `/ao-list`                                                                          | `Get-WindowsADActivationObject`                                                                                        |             Supported | Returns structured activation-object records from the AD configuration partition.                        |
-| `/del-ao <AO_DN>`                                                                   | `Remove-WindowsADActivationObject -DistinguishedName <AO_DN>`                                                         |             Supported | Requires the exact distinguished name and high-impact confirmation.                                       |
-| `/del-ao <AO_RDN>`                                                                  | None                                                                                                                   | Deliberately unsupported | RDN-only deletion is intentionally rejected to avoid ambiguous directory mutations.                    |
+| `slmgr.vbs` option                                                                  | `slmgr-ps` equivalent                                                                                                  |                   Status | Notes                                                                                                      |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -----------------------: | ---------------------------------------------------------------------------------------------------------- |
+| `/ad-activation-online <Product Key>`                                               | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                                  |    Supported differently | `slmgr-ps` requires an explicit object name so duplicate detection and post-create verification are exact. |
+| `/ad-activation-online <Product Key> <Activation Object name>`                      | `New-WindowsADActivationObject -ProductKey <ProductKey> -ActivationObjectName <Name>`                                  |                Supported | Creates and verifies the named activation object.                                                          |
+| `/ad-activation-get-iid <Product Key>`                                              | `Get-WindowsADActivationInstallationId -ProductKey <ProductKey>`                                                       |                Supported | Returns structured installation-ID output for a resumable offline workflow.                                |
+| `/ad-activation-apply-cid <Product Key> <Confirmation ID>`                          | `New-WindowsADActivationObject -ProductKey <ProductKey> -ConfirmationId <ConfirmationId> -ActivationObjectName <Name>` |    Supported differently | `slmgr-ps` requires an explicit object name.                                                               |
+| `/ad-activation-apply-cid <Product Key> <Confirmation ID> <Activation Object name>` | `New-WindowsADActivationObject -ProductKey <ProductKey> -ConfirmationId <ConfirmationId> -ActivationObjectName <Name>` |                Supported | Deposits the confirmation ID and verifies the named object.                                                |
+| `/ao-list`                                                                          | `Get-WindowsADActivationObject`                                                                                        |                Supported | Returns structured activation-object records from the AD configuration partition.                          |
+| `/del-ao <AO_DN>`                                                                   | `Remove-WindowsADActivationObject -DistinguishedName <AO_DN>`                                                          |                Supported | Requires the exact distinguished name and high-impact confirmation.                                        |
+| `/del-ao <AO_RDN>`                                                                  | None                                                                                                                   | Deliberately unsupported | RDN-only deletion is intentionally rejected to avoid ambiguous directory mutations.                        |
+
+## Relationship to Microsoft's OSLicense module
+
+Microsoft's `OSLicense` module is the official Microsoft PowerShell surface for supported Windows licensing administration. `slmgr-ps` is not an adapter for it and does not use it as a runtime dependency or fallback.
+
+| Concern | `slmgr-ps` | `OSLicense` |
+| --- | --- | --- |
+| Ownership and support | Independent community project | Microsoft-provided module |
+| Implementation relationship | Uses documented SPP CIM and other public Windows interfaces directly | Microsoft implementation |
+| Runtime dependency between the two | None | None required by `slmgr-ps` |
+| `slmgr.vbs` parity documentation | Explicitly maintained in this README | Not used as the compatibility contract for this project |
+| Project contract | PowerShell-native 1.x commands documented here | Defined by Microsoft's module documentation for the installed Windows generation |
+
+This table is intentionally architectural rather than a cmdlet-by-cmdlet equivalence claim. `OSLicense` can evolve with Windows, and its presence or absence does not change how `slmgr-ps` executes. New deployments that require Microsoft support should prefer Microsoft's supported tooling; `slmgr-ps` remains useful where its independent command surface, remote batching, or Windows Script Host-free operation is specifically required.
 
 ## Design differences from slmgr.vbs
 
@@ -505,6 +545,7 @@ The following areas are intentionally not presented as supported yet:
 - RDN-only Active Directory activation-object deletion; an exact distinguished name is required.
 - Active Directory activation-object operations require the ActiveDirectory PowerShell module and appropriate forest connectivity and privileges.
 - KMS host mutations require a target that reports `IsKeyManagementServiceMachine = 1`; host behavior still requires real-host integration testing in an isolated environment.
+- Full cross-version Windows and PowerShell integration coverage has not yet been completed.
 - `slmgr.vbs` command-line syntax compatibility.
 
 ## Security notes
@@ -547,13 +588,14 @@ The module can be imported without elevation for read-only commands. Mutating SP
 
 ## Contributing
 
-The long-term goal is to cover more of the practical `slmgr.vbs` workflow surface while keeping the PowerShell interface safer and more maintainable than the original VBScript command style.
+The 1.9.x line is focused on stabilization, correctness fixes, provider compatibility, tests, and documentation. Breaking public-contract cleanup remains deferred to a later manually reviewed 2.0.0 release.
 
 Useful contribution areas include:
 
 - Adding real KMS host integration tests for supported host methods and provider behavior.
 - Adding tests for CIM provider compatibility across supported Windows versions.
 - Adding Active Directory integration tests for forest reachability, duplicate objects, privileges, and verified publication/deletion.
+- Expanding the PowerShell and Windows validation matrix without changing the established 1.x command surface.
 - Improving documentation and examples.
 
 Please refer to [CONTRIBUTING.md](CONTRIBUTING.md) for pull request guidance.
