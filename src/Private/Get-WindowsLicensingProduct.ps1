@@ -33,6 +33,8 @@ function Get-WindowsLicensingProduct
         'TokenActivationILID', 'TokenActivationILVID',
         'TokenActivationGrantNumber', 'TokenActivationCertificateThumbprint',
         'TokenActivationAdditionalInfo',
+        'ADActivationObjectName', 'ADActivationObjectDN',
+        'ADActivationCsvlkPid', 'ADActivationCsvlkSkuId',
         'KeyManagementServiceMachine', 'KeyManagementServicePort',
         'DiscoveredKeyManagementServiceMachineName',
         'DiscoveredKeyManagementServiceMachinePort',
@@ -125,7 +127,6 @@ function Get-WindowsLicensingProduct
     }
     else
     {
-        # Multiple products can appear after in-place upgrades. Prefer Licensed, then any active state.
         $licensed = @($baseCandidates | Where-Object { $_.LicenseStatus -eq 1 })
         if ($licensed.Count -eq 1)
         {
