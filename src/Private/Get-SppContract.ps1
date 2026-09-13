@@ -30,6 +30,24 @@ function Get-SppContract
         )
         ServiceProperties = @(
             'KeyManagementServiceHostCaching',
+            'IsKeyManagementServiceMachine',
+            'VLActivationInterval',
+            'VLRenewalInterval',
+            'KeyManagementServiceCurrentCount',
+            'RequiredClientCount',
+            'KeyManagementServiceProductKeyID',
+            'KeyManagementServiceListeningPort',
+            'KeyManagementServiceDnsPublishing',
+            'KeyManagementServiceLowPriority',
+            'KeyManagementServiceUnlicensedRequests',
+            'KeyManagementServiceLicensedRequests',
+            'KeyManagementServiceOOBGraceRequests',
+            'KeyManagementServiceOOTGraceRequests',
+            'KeyManagementServiceNonGenuineGraceRequests',
+            'KeyManagementServiceNotificationRequests',
+            'KeyManagementServiceTotalRequests',
+            'KeyManagementServiceFailedRequests',
+            'KeyManagementServiceActivationDisabled',
             'TokenActivationILID',
             'TokenActivationILVID',
             'TokenActivationGrantNumber',
@@ -48,6 +66,10 @@ function Get-SppContract
         Methods = @{
             Activate = @{
                 Classes   = @('SoftwareLicensingProduct')
+                Arguments = @()
+            }
+            ClearKeyManagementServiceListeningPort = @{
+                Classes   = @('SoftwareLicensingService')
                 Arguments = @()
             }
             ClearKeyManagementServiceMachine = @{
@@ -78,6 +100,10 @@ function Get-SppContract
                 Classes   = @('SoftwareLicensingProduct')
                 Arguments = @('InstallationId', 'ConfirmationId')
             }
+            DisableKeyManagementServiceDnsPublishing = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('DisablePublishing')
+            }
             DisableKeyManagementServiceHostCaching = @{
                 Classes   = @('SoftwareLicensingService')
                 Arguments = @('DisableCaching')
@@ -85,6 +111,10 @@ function Get-SppContract
             DoActiveDirectoryOnlineActivation = @{
                 Classes   = @('SoftwareLicensingService')
                 Arguments = @('ProductKey', 'ActivationObjectName')
+            }
+            EnableKeyManagementServiceLowPriority = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('EnableLowPriority')
             }
             GenerateActiveDirectoryOfflineActivationId = @{
                 Classes   = @('SoftwareLicensingService')
@@ -114,6 +144,10 @@ function Get-SppContract
                 Classes   = @('SoftwareLicensingService')
                 Arguments = @()
             }
+            SetKeyManagementServiceListeningPort = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('PortNumber')
+            }
             SetKeyManagementServiceMachine = @{
                 Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
                 Arguments = @('MachineName')
@@ -125,6 +159,14 @@ function Get-SppContract
             SetKeyManagementServicePort = @{
                 Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
                 Arguments = @('PortNumber')
+            }
+            SetVLActivationInterval = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('ActivationInterval')
+            }
+            SetVLRenewalInterval = @{
+                Classes   = @('SoftwareLicensingService')
+                Arguments = @('RenewalInterval')
             }
             SetVLActivationTypeEnabled = @{
                 Classes   = @('SoftwareLicensingService', 'SoftwareLicensingProduct')
