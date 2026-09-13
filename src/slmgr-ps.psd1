@@ -12,7 +12,7 @@
     RootModule        = 'slmgr-ps.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '1.6.0'
+    ModuleVersion     = '1.7.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -71,7 +71,9 @@
     # Functions to export from this module
     FunctionsToExport = @(
         'Get-WindowsActivation'
+        'Get-WindowsTokenActivationLicense'
         'Install-WindowsLicense'
+        'Remove-WindowsTokenActivationLicense'
         'Repair-WindowsLicense'
         'Reset-WindowsActivation'
         'Set-WindowsActivationType'
@@ -115,7 +117,7 @@
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'Added service-wide and activation-ID-scoped volume activation type policy controls with provider-contract validation and extended policy reporting.'
+            ReleaseNotes = 'Added documented token activation issuance-license reporting and verified removal, plus extended token activation state reporting.'
 
             # External dependent modules of this module
             # ExternalModuleDependencies = ''

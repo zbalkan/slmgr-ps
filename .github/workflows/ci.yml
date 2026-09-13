@@ -64,7 +64,9 @@ jobs:
           $exported = $module.ExportedFunctions.Keys | Sort-Object
           $expected = @(
             'Get-WindowsActivation'
+            'Get-WindowsTokenActivationLicense'
             'Install-WindowsLicense'
+            'Remove-WindowsTokenActivationLicense'
             'Repair-WindowsLicense'
             'Reset-WindowsActivation'
             'Set-WindowsActivationType'
