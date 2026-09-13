@@ -13,11 +13,19 @@ function Invoke-OfflineActivation
 
     $licenseInfo = Get-LicenseStatus @targetParams
     Write-Verbose "License Status: $($licenseInfo.LicenseStatus)"
-    if ($licenseInfo.Activated) { Write-Warning 'The product is already activated.'; return }
+    if ($licenseInfo.Activated)
+    {
+        Write-Warning 'The product is already activated.'
+        return [PSCustomObject]@{
+            ActivationId      = $licenseInfo.ActivationId
+            ProductName       = $licenseInfo.ProductName
+            VerificationState = 'Verified'
+            RestartRequired   = $false
+        }
+    }
 
     $product = Get-WindowsLicensingProduct @targetParams
 
-    # Accept dashes, spaces, or plain digits; strip separators before submission
     $normalizedCid = $ConfirmationId -replace '[\s\-]', ''
     $installationId = (Get-OfflineInstallationId -CimSession $CimSession -Product $product).OfflineInstallationId
 
@@ -44,5 +52,14 @@ function Invoke-OfflineActivation
     else
     {
         throw "Offline activation failed. Current status: $($finalLicenseInfo.LicenseStatus)"
+    }
+
+    $outcomeActivationId = if ($null -ne $finalLicenseInfo.ActivationId) { $finalLicenseInfo.ActivationId } else { $product.ID }
+    $outcomeProductName = if (-not [string]::IsNullOrEmpty($finalLicenseInfo.ProductName)) { $finalLicenseInfo.ProductName } else { $product.Name }
+    return [PSCustomObject]@{
+        ActivationId      = $outcomeActivationId
+        ProductName       = $outcomeProductName
+        VerificationState = 'Verified'
+        RestartRequired   = $false
     }
 }
