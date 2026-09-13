@@ -6,7 +6,8 @@ function Invoke-SppCimMethod
         [CimInstance]$InputObject,
         [Parameter(Mandatory)]
         [string]$MethodName,
-        [hashtable]$Arguments
+        [hashtable]$Arguments,
+        [switch]$PassThru
     )
     Process
     {
@@ -44,7 +45,30 @@ function Invoke-SppCimMethod
 
         if ($null -ne $result -and $result.ReturnValue -ne 0)
         {
-            throw "${MethodName}: licensing operation failed (return value: $($result.ReturnValue))"
+            $returnValue = [uint32]$result.ReturnValue
+            $errorCode = '0x{0:X8}' -f $returnValue
+            $message = "$MethodName failed with provider return value $returnValue ($errorCode)."
+            $exception = [System.InvalidOperationException]::new($message)
+            $exception.Data['ProviderReturnValue'] = $returnValue
+            $exception.Data['ErrorCode'] = $errorCode
+            $exception.Data['MethodName'] = $MethodName
+            $target = [PSCustomObject]@{
+                MethodName          = $MethodName
+                ClassName           = $className
+                ProviderReturnValue = $returnValue
+                ErrorCode           = $errorCode
+            }
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                $exception,
+                'SppProviderMethodFailed',
+                [System.Management.Automation.ErrorCategory]::InvalidResult,
+                $target)
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
+        }
+
+        if ($PassThru.IsPresent)
+        {
+            return $result
         }
     }
 }
