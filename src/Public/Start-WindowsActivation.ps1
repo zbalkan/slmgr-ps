@@ -112,6 +112,14 @@ function Start-WindowsActivation
             ValueFromPipeline = $false,
             ValueFromPipelineByPropertyName = $false,
             ValueFromRemainingArguments = $false,
+            ParameterSetName = 'Rearm')]
+        [Guid]
+        $ApplicationId,
+
+        [Parameter(Mandatory = $false,
+            ValueFromPipeline = $false,
+            ValueFromPipelineByPropertyName = $false,
+            ValueFromRemainingArguments = $false,
             ParameterSetName = 'ActivateWithKMS')]
         [switch]
         $CacheDisabled,
@@ -141,6 +149,7 @@ function Start-WindowsActivation
             ValueFromRemainingArguments = $false,
             ParameterSetName = 'ActivateWithKMS')]
         [Parameter(ParameterSetName = 'Offline')]
+        [Parameter(ParameterSetName = 'Rearm')]
         [Guid]
         $ActivationId,
 
@@ -178,6 +187,15 @@ function Start-WindowsActivation
     {
         $hasProductKey = $PSBoundParameters.ContainsKey('ProductKey')
         $hasActivationId = $PSBoundParameters.ContainsKey('ActivationId')
+        $hasApplicationId = $PSBoundParameters.ContainsKey('ApplicationId')
+        if ($PSCmdlet.ParameterSetName -eq 'Rearm' -and -not $Rearm.IsPresent)
+        {
+            throw 'ApplicationId and ActivationId require the Rearm switch in the rearm parameter set.'
+        }
+        if ($hasApplicationId -and $hasActivationId)
+        {
+            throw 'ApplicationId and ActivationId cannot be used together for rearm.'
+        }
         if ($UseKmsClientKey.IsPresent -and $hasProductKey)
         {
             throw 'UseKmsClientKey and ProductKey cannot be used together.'
@@ -229,7 +247,10 @@ function Start-WindowsActivation
                     'Rearm'
                     {
                         Write-Verbose 'Initiating ReArm operation'
-                        Invoke-Rearm -CimSession $session -Service $service
+                        $rearmParams = @{ CimSession = $session; Service = $service }
+                        if ($hasApplicationId) { $rearmParams['ApplicationId'] = $ApplicationId }
+                        if ($hasActivationId) { $rearmParams['ActivationId'] = $ActivationId }
+                        Invoke-Rearm @rearmParams
                     }
 
                     'ActivateWithKMS'
