@@ -4,6 +4,15 @@ A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
 `slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows activation operations, especially licensing status, online and offline activation, license installation and repair, rearm, product-key removal, product-key registry cleanup, and KMS client workflows.
 
+## Changes in 1.5.0
+
+- Added a stable `slmgr-ps.LicensingOperationResult` contract for mutating commands.
+- Added explicit `Verified`, `ProviderAccepted`, `NotVerifiable`, and `Failed` verification states.
+- Standardized provider failures with hexadecimal SPP/CIM error codes when available and stable operation identifiers.
+- Replaced repeated per-target error emission followed by a duplicate first-error throw with one aggregate batch error containing structured failed-target results.
+- Expanded extended activation reporting with numeric and readable license status, status reason, evaluation end date, grace and rearm data, service version, client-machine ID, KMS-host state, and activation/renewal intervals.
+- Preserved unset provider dates as `$null` rather than artificial minimum dates.
+
 ## Changes in 1.4.0
 
 - Added standalone KMS client endpoint, port, lookup-domain, and host-caching configuration.
@@ -78,6 +87,26 @@ The module currently exports six public functions:
 
 The current implementation is intentionally narrower than `slmgr.vbs`. It supports default, activation-ID, and all-product client queries, targeted client activation and reset operations, KMS client configuration, license installation, local system-license repair, and targeted rearm. It does not currently support token-based activation, Active Directory-based activation, or KMS server configuration.
 
+## Operation results and errors
+
+Mutating commands emit a `slmgr-ps.LicensingOperationResult` for each computer on which an operation is attempted. The result contract is stable across activation, rearm, KMS client configuration, reset, license installation, and system-license repair.
+
+| Field | Meaning |
+| --- | --- |
+| `ComputerName` | Target computer associated with the operation. |
+| `Success` | Whether the requested operation completed according to its verification contract. |
+| `Operation` | Stable operation identifier suitable for automation. |
+| `ActivationId` | Exact affected licensing product identifier when applicable. |
+| `ProductName` | Resolved product name when applicable and available. |
+| `RestartRequired` | Whether a restart is required before the change is fully effective. |
+| `ErrorCode` | SPP or CIM error code formatted as `0xXXXXXXXX` when one is available. Generic PowerShell or .NET errors do not invent a licensing error code. |
+| `ErrorMessage` | Provider or exception message without intentionally echoing sensitive command input. |
+| `VerificationState` | `Verified`, `ProviderAccepted`, `NotVerifiable`, or `Failed`. |
+
+`Verified` means the module queried a reliable final state and confirmed the intended outcome. `ProviderAccepted` means the documented provider call succeeded but the final state cannot yet be established reliably, such as a rearm operation that requires restart. `NotVerifiable` is reserved for successful operations for which the provider exposes no reliable read-back path. `Failed` identifies a failed target.
+
+For multi-computer operations, the module continues with later targets when it is safe to do so. If any target fails, the command terminates after the batch with a `LicensingBatchFailed` error. Its `TargetObject` contains the failed `LicensingOperationResult` objects, and detailed per-target errors are retained in the exception data. The module does not write the same collected failure repeatedly before throwing the aggregate error.
+
 ## Installation
 
 ```powershell
@@ -98,7 +127,7 @@ Get-WindowsActivation -Extended
 # Expiration information, similar to slmgr.vbs /xpr for the selected Windows product
 Get-WindowsActivation -Expiry
 
-# Offline installation ID, similar to slmgr.vbs /dti for the selected Windows product
+# Offline installation ID, similar to slmgr.vbs /dti for offline -aka phone- activation
 Get-WindowsActivation -Offline
 
 # Query one product by activation ID
@@ -109,7 +138,7 @@ Get-WindowsActivation -All
 Get-WindowsActivation -Extended -All
 ```
 
-Extended output includes configured and discovered KMS host and port values, the KMS lookup domain, and the service-wide host-caching state when the provider exposes them.
+Extended output includes the raw numeric and readable license status, status reason, grace period, evaluation end date, Windows/application/SKU rearm counts, trusted time, SPP service version, client-machine ID, KMS-host status, volume activation and renewal intervals, configured and discovered KMS host and port values, the KMS lookup domain, and service-wide host-caching state when the provider exposes them. Unset provider dates are returned as `$null`.
 
 ### Work with remote computers
 
@@ -233,7 +262,7 @@ Install-WindowsLicense -Computer WS01, WS02 -Credentials (Get-Credential) `
 Repair-WindowsLicense
 ```
 
-`Install-WindowsLicense` resolves and reads the supplied files on the computer running PowerShell, then sends their contents through CIM to each target. It accepts `.xrm-ms` files only, rejects empty and duplicate paths, attempts every validated file and computer, refreshes licensing after successful installations, and terminates with an error if any operation failed.
+`Install-WindowsLicense` resolves and reads the supplied files on the computer running PowerShell, then sends their contents through CIM to each target. It accepts `.xrm-ms` files only, rejects empty and duplicate paths, attempts every validated file and computer, refreshes licensing after successful installations, and terminates with an aggregate error if any target operation failed.
 
 `Repair-WindowsLicense` is intentionally local-only. It reads the license files from the current Windows installation so licenses from the management computer cannot accidentally be applied to a remote target. It skips filesystem reparse points, processes files in deterministic order, continues past individual failures, and refreshes licensing when at least one file was reinstalled.
 
@@ -383,7 +412,7 @@ slmgr.vbs [<ComputerName> [<User> <Password>]] [<Options>]
 - It uses `PSCredential` rather than command-line password arguments.
 - It uses CIM sessions.
 - Remote execution uses WinRM.
-- It returns PowerShell objects for reporting commands.
+- It returns PowerShell objects for reporting commands and stable operation-result objects for mutating commands.
 - It supports PowerShell pipeline-friendly usage.
 - It includes KMS client setup keys for supported Windows editions.
 - It combines explicit product-key installation and activation in one command.
@@ -407,7 +436,7 @@ Avoid passing secrets directly on the command line. `slmgr.vbs` supports a comma
 
 An explicit `-ProductKey` remains plain command-line input and may be retained in PowerShell history. Protect shell history and automation logs, and avoid recording the full invocation in shared diagnostics.
 
-For calls containing multiple computers or license files, mutating commands attempt every applicable item before reporting collected failures. The command still ends with a terminating error when any target or file fails, so automation must treat the invocation as failed even when later operations succeeded.
+For calls containing multiple computers or license files, mutating commands attempt every applicable item before reporting collected failures. Successful targets emit normal operation-result objects. Failed targets are represented in the final `LicensingBatchFailed` error, so automation must treat the invocation as failed even when later operations succeeded.
 
 For remote execution, prefer properly configured WinRM. Where appropriate, use HTTPS for WinRM. See Microsoft documentation on [WinRM security](https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/winrm-security).
 
