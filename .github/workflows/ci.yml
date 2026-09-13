@@ -2,9 +2,24 @@ name: CI
 
 on:
   push:
-    branches: [main, 'claude/**']
+    branches: [main]
+    paths-ignore: &documentation-only
+      - "**/*.md"
+      - "**/*.txt"
+      - "**/*.avif"
+      - "**/*.bmp"
+      - "**/*.gif"
+      - "**/*.ico"
+      - "**/*.jpeg"
+      - "**/*.jpg"
+      - "**/*.png"
+      - "**/*.svg"
+      - "**/*.tif"
+      - "**/*.tiff"
+      - "**/*.webp"
   pull_request:
     branches: [main]
+    paths-ignore: *documentation-only
 
 jobs:
   lint:
