@@ -166,6 +166,9 @@ function Set-WindowsKmsHost
                             $service | Invoke-SppCimMethod -MethodName $setting.Method -Arguments $setting.Arguments
                         }
 
+                        # Intentional per-setting round trip: each change is re-read and verified
+                        # independently so a partial failure preserves accurate per-setting results
+                        # instead of trusting one combined read-back at the end.
                         $service = Get-KmsHostService -CimSession $session -ErrorAction Stop
                         $actual = $service.($setting.Property)
                         if ($actual -ne $setting.Expected)
