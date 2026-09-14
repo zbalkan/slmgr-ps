@@ -3,6 +3,7 @@
 A partial PowerShell alternative for common `slmgr.vbs` workflows.
 
 `slmgr-ps` is not yet a parameter-compatible or feature-complete replacement for `slmgr.vbs`. The current module focuses on common Windows licensing and activation operations, including licensing status, online and offline activation, license installation and repair, rearm, product-key removal, KMS client and host configuration, activation-type policy, token issuance-license management, and documented Active Directory-based activation workflows.
+> Microsoft now provides the official [OSLicense PowerShell module](https://learn.microsoft.com/en-gb/powershell/module/oslicense/?view=windowsserver2025-ps). New deployments should generally prefer OSLicense where it is available and meets their requirements. `slmgr-ps` remains an independent implementation for existing automation, environments where OSLicense is unavailable, and Windows Script Host-free workflows; it does not import, call, wrap, or depend on OSLicense components.
 
 ## About this module
 
@@ -21,8 +22,6 @@ That also meant I could no longer use tools such as `slmgr.vbs`, `OSPP.vbs`, and
 The original version was a small PowerShell script based on `slmgr.vbs`. You can still find the old script in [my gist](https://gist.github.com/zbalkan/4ba92656a3a8387e6b220bcf8fcd5fc6).
 
 This repository turns that script into a PowerShell module so it can be installed and used more easily. You can find it in the [PowerShell Gallery](https://www.powershellgallery.com/packages/slmgr-ps).
-
-Microsoft now provides the official [OSLicense PowerShell module](https://learn.microsoft.com/en-gb/powershell/module/oslicense/?view=windowsserver2025-ps). `slmgr-ps` remains an independent community alternative: it uses documented Windows Software Protection Platform CIM interfaces and public Windows interfaces directly and does not import, call, wrap, or depend on OSLicense components.
 
 ## Installation
 
@@ -507,7 +506,7 @@ Microsoft's `OSLicense` module is the official Microsoft PowerShell surface for 
 | `slmgr.vbs` parity documentation   | Explicitly maintained in this README                                 | Not used as the compatibility contract for this project                          |
 | Project contract                   | PowerShell-native 1.x commands documented here                       | Defined by Microsoft's module documentation for the installed Windows generation |
 
-This table is intentionally architectural rather than a cmdlet-by-cmdlet equivalence claim. `OSLicense` can evolve with Windows, and its presence or absence does not change how `slmgr-ps` executes. New deployments that require Microsoft support should prefer Microsoft's supported tooling; `slmgr-ps` remains useful where its independent command surface, remote batching, or Windows Script Host-free operation is specifically required.
+This table is intentionally architectural rather than a cmdlet-by-cmdlet equivalence claim. `OSLicense` can evolve with Windows, and its presence or absence does not change how `slmgr-ps` executes. New deployments should generally prefer OSLicense where it is available and meets their requirements. `slmgr-ps` remains useful for existing automation, its documented remote and batch workflows, Windows Script Host-free environments, and deployment contexts where OSLicense is unavailable.
 
 ## Design differences from slmgr.vbs
 
@@ -580,7 +579,7 @@ The module can be imported without elevation for read-only commands. Mutating SP
 
 ## Contributing
 
-The 1.9.x line is focused on stabilization, correctness fixes, provider compatibility, tests, and documentation. Breaking public-contract cleanup remains deferred to a later manually reviewed 2.0.0 release.
+`slmgr-ps` is approaching feature completion. Future releases continue to follow Semantic Versioning within the 1.x line: patch releases may contain backward-compatible fixes and documentation or provider-compatibility improvements, while minor releases may add backward-compatible functionality where there is a clear practical need. No 2.x release is currently planned, and intentional breaking changes to the established public contract are out of scope. The project is expected to move to archived status once remaining validation and maintenance work is complete.
 
 Useful contribution areas include:
 
