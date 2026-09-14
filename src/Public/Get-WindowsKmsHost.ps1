@@ -62,10 +62,6 @@ function Get-WindowsKmsHost
                 $result.PSObject.TypeNames.Insert(0, 'slmgr-ps.KmsHostStatus')
                 Write-Output $result
             }
-            catch
-            {
-                $PSCmdlet.WriteError($_)
-            }
             finally
             {
                 if ($null -ne $session)
