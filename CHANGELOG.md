@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* `Get-WindowsActivation`, `Get-WindowsKmsHost`, and `Get-WindowsTokenActivationLicense` now continue past a failed target when querying multiple computers, matching the continue-and-aggregate behavior already used by mutating commands, instead of aborting the whole batch on the first failure.
+* `Set-WindowsKmsHost` documents with an inline comment why each applied setting is re-read and verified individually rather than in one combined read-back.
+* Split the reference-shaped sections of `README.md` (usage examples, the slmgr.vbs comparison and design differences, the validation matrix, and the OSLicense relationship) into `docs/USAGE.md`, `docs/slmgr-comparison.md`, `docs/VALIDATION.md`, and `docs/OSLICENSE.md`, each linked from a short summary. `README.md` shrinks from roughly 12,600 to under 6,000 characters.
+* Fixed the CI `paths-ignore` glob so documentation- and image-only pushes are skipped for files under `docs/` and `images/`, not just the repository root.
+
+### Fixed
+
+* Renamed a local variable in `Remove-WindowsTokenActivationLicense` that shadowed PowerShell's automatic `$Matches` variable.
+
 ## [1.9.2] - 2026-09-13
 
 ### Added
