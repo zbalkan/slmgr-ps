@@ -59,13 +59,13 @@ function Remove-WindowsTokenActivationLicense
             try
             {
                 $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
-                $matches = @(Get-TokenActivationLicense -CimSession $session -ILID $ILID -ILVID $ILVID -ErrorAction Stop)
-                if ($matches.Count -eq 0)
+                $existingLicenses = @(Get-TokenActivationLicense -CimSession $session -ILID $ILID -ILVID $ILVID -ErrorAction Stop)
+                if ($existingLicenses.Count -eq 0)
                 {
                     throw "Token activation issuance license with ILID $ILID and ILVID $ILVID was not found."
                 }
 
-                $license = $matches[0]
+                $license = $existingLicenses[0]
                 $license | Invoke-SppCimMethod -MethodName Uninstall
 
                 $remaining = @(Get-TokenActivationLicense -CimSession $session -ILID $ILID -ILVID $ILVID -ErrorAction Stop)

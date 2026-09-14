@@ -66,6 +66,10 @@ function Get-WindowsTokenActivationLicense
                     Write-Output $result
                 }
             }
+            catch
+            {
+                $PSCmdlet.WriteError($_)
+            }
             finally
             {
                 if ($null -ne $session)

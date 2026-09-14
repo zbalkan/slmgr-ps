@@ -91,9 +91,10 @@ function Get-WindowsActivation
         foreach ($c in $Computer)
         {
             Write-Verbose "Creating new CimSession for computer $c"
-            $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
+            $session = $null
             try
             {
+                $session = Get-Session -Computer $c -Credentials $Credentials -ErrorAction Stop
                 $products = @()
                 if ($PSBoundParameters.ContainsKey('ActivationId'))
                 {
@@ -145,6 +146,10 @@ function Get-WindowsActivation
                         $results.Add($result)
                     }
                 }
+            }
+            catch
+            {
+                $PSCmdlet.WriteError($_)
             }
             finally
             {
